@@ -14,23 +14,31 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
+    // Normalize email - trim whitespace and lowercase
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Backend password length enforcement
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
     // Check if user exists
-    const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
     
     if (existingUsers.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(409).json({ message: 'An account with this email already exists' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Determine role (admin if email matches)
-    const role = email.toLowerCase() === 'ali.assi@kingston.ac.uk' ? 'admin' : 'student';
+    const role = normalizedEmail === 'ali.assi@kingston.ac.uk' ? 'admin' : 'student';
 
     // Insert user
     const [result] = await db.query(
       'INSERT INTO users (email, password, full_name, role, major, year_of_study) VALUES (?, ?, ?, ?, ?, ?)',
-      [email, hashedPassword, full_name, role, major, year_of_study]
+      [normalizedEmail, hashedPassword, full_name.trim(), role, major, year_of_study]
     );
 
     // Get created user
@@ -73,10 +81,13 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Please provide email and password' });
     }
 
+    // Normalize email before lookup
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Get user
     const [users] = await db.query(
       'SELECT * FROM users WHERE email = ?',
-      [email]
+      [normalizedEmail]
     );
 
     if (users.length === 0) {
@@ -134,9 +145,15 @@ exports.getMe = async (req, res) => {
       [req.user.id]
     );
 
+    // Also fetch skills so the client has everything in one call
+    const [skills] = await db.query(
+      'SELECT skill_name, skill_type, proficiency_level FROM skills WHERE user_id = ?',
+      [req.user.id]
+    );
+
     res.json({
       success: true,
-      user: users[0]
+      user: { ...users[0], skills }
     });
 
   } catch (error) {
@@ -154,6 +171,14 @@ exports.changePassword = async (req, res) => {
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Please provide both passwords' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ message: 'New password must differ from current password' });
     }
 
     // Get user with password

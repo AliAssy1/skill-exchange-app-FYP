@@ -33,9 +33,10 @@ export default function RegistrationScreen({ navigation }) {
 
   const validateForm = () => {
     const newErrors = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!fullName.trim()) newErrors.fullName = 'Full name is required';
-    if (!email.includes('@')) newErrors.email = 'Valid email is required';
+    if (!emailRegex.test(email.trim())) newErrors.email = 'Valid email address is required';
     if (!studentID.trim()) newErrors.studentID = 'Student ID is required';
     if (password.length < 6) newErrors.password = 'Password must be at least 6 characters';
     if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
@@ -46,14 +47,21 @@ export default function RegistrationScreen({ navigation }) {
   };
 
   const handleRegister = async () => {
+    // Normalize inputs before validation and submission
+    const trimmedName = fullName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    setFullName(trimmedName);
+    setEmail(normalizedEmail);
+
     if (validateForm()) {
       setLoading(true);
       setErrors({});
       
       try {
         await register({
-          full_name: fullName,
-          email,
+          full_name: trimmedName,
+          email: normalizedEmail,
           password,
           major: 'Not specified',
           year_of_study: 'Not specified',

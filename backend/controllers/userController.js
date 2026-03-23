@@ -43,9 +43,17 @@ exports.updateProfile = async (req, res) => {
   try {
     const { full_name, major, year_of_study, bio } = req.body;
 
+    // Sanitize inputs
+    const trimmedName = full_name ? full_name.trim() : null;
+    const trimmedBio = bio ? bio.trim() : null;
+
+    if (!trimmedName) {
+      return res.status(400).json({ message: 'Full name is required' });
+    }
+
     await db.query(
       'UPDATE users SET full_name = ?, major = ?, year_of_study = ?, bio = ? WHERE id = ?',
-      [full_name, major, year_of_study, bio, req.user.id]
+      [trimmedName, major, year_of_study, trimmedBio, req.user.id]
     );
 
     const [users] = await db.query(
@@ -144,23 +152,29 @@ exports.getUserStats = async (req, res) => {
 // @access  Private
 exports.searchUsers = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, page = 1, limit = 10 } = req.query;
 
     if (!q) {
       return res.status(400).json({ message: 'Please provide search query' });
     }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit))); // cap at 50
+    const offset = (pageNum - 1) * limitNum;
 
     const [users] = await db.query(
       `SELECT id, full_name, email, major, avatar_url, reputation_score 
        FROM users 
        WHERE account_status = 'active' 
        AND (full_name LIKE ? OR email LIKE ? OR major LIKE ?)
-       LIMIT 20`,
-      [`%${q}%`, `%${q}%`, `%${q}%`]
+       LIMIT ? OFFSET ?`,
+      [`%${q}%`, `%${q}%`, `%${q}%`, limitNum, offset]
     );
 
     res.json({
       success: true,
+      page: pageNum,
+      limit: limitNum,
       users
     });
 

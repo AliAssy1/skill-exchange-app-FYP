@@ -23,19 +23,24 @@ export default function LoginScreen({ navigation }) {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!email.includes('@')) newErrors.email = 'Valid email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) newErrors.email = 'Valid email address is required';
     if (!password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleLogin = async () => {
+    // Normalize email before validation and submission
+    const normalizedEmail = email.trim().toLowerCase();
+    setEmail(normalizedEmail);
+
     if (validateForm()) {
       setLoading(true);
       setErrors({});
       
       try {
-        const response = await login(email, password);
+        const response = await login(normalizedEmail, password);
         
         // Check if admin user
         if (response.user.role === 'admin') {
