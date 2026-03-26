@@ -5,8 +5,11 @@ const db = require('../config/database');
 // @access  Public
 exports.getServices = async (req, res) => {
   try {
-    const { category, search, page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
+    const { category, search, page = 1 } = req.query;
+    // Cap limit at 50 per page to prevent database overload
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const safePage = Math.max(parseInt(page) || 1, 1);
+    const offset = (safePage - 1) * limit;
 
     let query = `
       SELECT s.*, u.full_name, u.avatar_url, u.reputation_score
@@ -26,8 +29,8 @@ exports.getServices = async (req, res) => {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+        query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const [services] = await db.query(query, params);
 
@@ -45,9 +48,9 @@ exports.getServices = async (req, res) => {
     res.json({
       success: true,
       services,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+            pagination: {
+        page: safePage,
+        limit,
         total: countResult[0].total
       }
     });
@@ -94,16 +97,51 @@ exports.getService = async (req, res) => {
 // @access  Private
 exports.createService = async (req, res) => {
   try {
-    const { title, description, category, skill_required, credits_cost, duration_minutes, location } = req.body;
+            const { title, description, category, skill_required, credits_cost, duration_minutes, location } = req.body;
 
     if (!title || !description || !category || !credits_cost) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
+    // Trim and sanitize text inputs
+    const cleanTitle = title.trim();
+    const cleanDescription = description.trim();
+    const cleanCategory = category.trim();
+    const cleanSkillRequired = skill_required ? skill_required.trim() : null;
+    const cleanLocation = location ? location.trim() : null;
+
+    // Validate trimmed fields are not empty
+    if (!cleanTitle || !cleanDescription || !cleanCategory) {
+      return res.status(400).json({ message: 'Title, description and category cannot be empty or whitespace' });
+    }
+
+    // Enforce max length on text fields
+    if (cleanTitle.length > 100) {
+      return res.status(400).json({ message: 'Title must be 100 characters or less' });
+    }
+    if (cleanDescription.length > 2000) {
+      return res.status(400).json({ message: 'Description must be 2000 characters or less' });
+    }
+
+    // Validate credits_cost is a positive number
+    const parsedCredits = Number(credits_cost);
+    if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) {
+      return res.status(400).json({ message: 'Credits cost must be a positive number' });
+    }
+
+    // Validate duration_minutes if provided
+    let parsedDuration = null;
+    if (duration_minutes !== undefined && duration_minutes !== null) {
+      parsedDuration = Number(duration_minutes);
+      if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+        return res.status(400).json({ message: 'Duration must be a positive number in minutes' });
+      }
+    }
+
     const [result] = await db.query(
       `INSERT INTO services (user_id, title, description, category, skill_required, credits_cost, duration_minutes, location)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, title, description, category, skill_required, credits_cost, duration_minutes, location]
+      [req.user.id, cleanTitle, cleanDescription, cleanCategory, cleanSkillRequired, parsedCredits, parsedDuration, cleanLocation]
     );
 
     const [services] = await db.query('SELECT * FROM services WHERE id = ?', [result.insertId]);
@@ -132,13 +170,52 @@ exports.updateService = async (req, res) => {
       return res.status(404).json({ message: 'Service not found or unauthorized' });
     }
 
-    const { title, description, category, skill_required, credits_cost, duration_minutes, location, status } = req.body;
+            const { title, description, category, skill_required, credits_cost, duration_minutes, location, status } = req.body;
+
+    // Trim and sanitize text inputs
+    const cleanTitle = title ? title.trim() : services[0].title;
+    const cleanDescription = description ? description.trim() : services[0].description;
+    const cleanCategory = category ? category.trim() : services[0].category;
+    const cleanSkillRequired = skill_required ? skill_required.trim() : services[0].skill_required;
+    const cleanLocation = location ? location.trim() : services[0].location;
+
+    // Validate trimmed fields are not empty
+    if (!cleanTitle || !cleanDescription || !cleanCategory) {
+      return res.status(400).json({ message: 'Title, description and category cannot be empty or whitespace' });
+    }
+
+    // Enforce max length on text fields
+    if (cleanTitle.length > 100) {
+      return res.status(400).json({ message: 'Title must be 100 characters or less' });
+    }
+    if (cleanDescription.length > 2000) {
+      return res.status(400).json({ message: 'Description must be 2000 characters or less' });
+    }
+
+    // Validate credits_cost if provided
+    const parsedCredits = credits_cost ? Number(credits_cost) : services[0].credits_cost;
+    if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) {
+      return res.status(400).json({ message: 'Credits cost must be a positive number' });
+    }
+
+    // Validate duration_minutes if provided
+    const parsedDuration = duration_minutes ? Number(duration_minutes) : services[0].duration_minutes;
+    if (parsedDuration !== null && (!Number.isFinite(parsedDuration) || parsedDuration <= 0)) {
+      return res.status(400).json({ message: 'Duration must be a positive number in minutes' });
+    }
+
+    // Validate status if provided
+    const validStatuses = ['active', 'inactive', 'completed'];
+    const cleanStatus = status || 'active';
+    if (!validStatuses.includes(cleanStatus)) {
+      return res.status(400).json({ message: 'Invalid service status' });
+    }
 
     await db.query(
       `UPDATE services SET title = ?, description = ?, category = ?, skill_required = ?, 
        credits_cost = ?, duration_minutes = ?, location = ?, status = ?
        WHERE id = ?`,
-      [title, description, category, skill_required, credits_cost, duration_minutes, location, status || 'active', req.params.id]
+      [cleanTitle, cleanDescription, cleanCategory, cleanSkillRequired, parsedCredits, parsedDuration, cleanLocation, cleanStatus, req.params.id]
     );
 
     const [updatedService] = await db.query('SELECT * FROM services WHERE id = ?', [req.params.id]);

@@ -45,7 +45,12 @@ exports.getConversations = async (req, res) => {
 // @access  Private
 exports.getMessages = async (req, res) => {
   try {
-    const otherUserId = req.params.userId;
+    const otherUserId = parseInt(req.params.userId);
+
+    // Validate userId param
+    if (!Number.isFinite(otherUserId) || otherUserId <= 0) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
 
     const [messages] = await db.query(
       `SELECT m.*, u.full_name as sender_name
@@ -79,29 +84,49 @@ exports.getMessages = async (req, res) => {
 // @access  Private
 exports.sendMessage = async (req, res) => {
   try {
-    const { receiver_id, message } = req.body;
+        const { receiver_id, message } = req.body;
 
     if (!receiver_id || !message) {
       return res.status(400).json({ message: 'Please provide receiver_id and message' });
     }
 
+    // Trim and validate message content
+    const cleanMessage = message.trim();
+    if (!cleanMessage) {
+      return res.status(400).json({ message: 'Message cannot be empty or whitespace' });
+    }
+    if (cleanMessage.length > 2000) {
+      return res.status(400).json({ message: 'Message must be 2000 characters or less' });
+    }
+
+    // Validate receiver_id is a valid number
+    const parsedReceiverId = parseInt(receiver_id);
+    if (!Number.isFinite(parsedReceiverId) || parsedReceiverId <= 0) {
+      return res.status(400).json({ message: 'Invalid receiver ID' });
+    }
+
+    // Prevent sending messages to yourself
+    if (parsedReceiverId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot send a message to yourself' });
+    }
+
     // Check if receiver exists
-    const [users] = await db.query('SELECT id FROM users WHERE id = ? AND account_status = "active"', [receiver_id]);
+    const [users] = await db.query('SELECT id FROM users WHERE id = ? AND account_status = "active"', [parsedReceiverId]);
 
     if (users.length === 0) {
-      return res.status(404).json({ message: 'Receiver not found' });
+      return res.status(404).json({ message: 'Receiver not found or account inactive' });
     }
 
     const [result] = await db.query(
       'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)',
-      [req.user.id, receiver_id, message]
+      [req.user.id, parsedReceiverId, cleanMessage]
     );
 
     // Create notification for receiver
     await db.query(
       `INSERT INTO notifications (user_id, type, title, message, link)
        VALUES (?, 'new_message', 'New Message', ?, ?)`,
-      [receiver_id, `New message from ${req.user.full_name}`, `/chat/${req.user.id}`]
+      [parsedReceiverId, `New message from ${req.user.full_name}`, `/chat/${req.user.id}`]
     );
 
     const [newMessage] = await db.query(
