@@ -8,7 +8,7 @@ import Constants from 'expo-constants';
 // ⚠️  Run "ipconfig" (Windows) or "ifconfig" (Mac/Linux) 
 // ⚠️  and find your IPv4 address (e.g. 192.168.x.x)
 // ============================================================
-const SERVER_IP = '192.168.0.175';
+const SERVER_IP = '172.20.10.3';
 const SERVER_PORT = '5000';
 // ============================================================
 

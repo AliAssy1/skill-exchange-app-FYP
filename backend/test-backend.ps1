@@ -27,7 +27,7 @@ try {
 Write-Host "🔍 Test 2: Admin Login..." -ForegroundColor Yellow
 try {
     $loginBody = @{
-        email = "ali.assi@kingston.ac.uk"
+        email = "K2355109@kingston.ac.uk"
         password = "admin123"
     } | ConvertTo-Json
     
@@ -56,7 +56,7 @@ try {
     }
     $profileResponse = Invoke-RestMethod -Uri "$baseUrl/auth/me" -Method GET -Headers $headers
     
-    if ($profileResponse.success -and $profileResponse.user.email -eq "ali.assi@kingston.ac.uk") {
+    if ($profileResponse.success -and $profileResponse.user.email -eq "k2355109@kingston.ac.uk") {
         Write-Host "   ✅ PASS - Profile retrieved successfully" -ForegroundColor Green
         Write-Host "   💰 Credits: $($profileResponse.user.credits)" -ForegroundColor Gray
         Write-Host "   ⭐ Reputation: $($profileResponse.user.reputation_score)`n" -ForegroundColor Gray
@@ -101,7 +101,7 @@ try {
 Write-Host "🔍 Test 5: Duplicate Registration (should fail)..." -ForegroundColor Yellow
 try {
     $duplicateBody = @{
-        email = "ali.assi@kingston.ac.uk"
+        email = "K2355109@kingston.ac.uk"
         password = "test123"
         full_name = "Duplicate User"
     } | ConvertTo-Json

@@ -14,8 +14,13 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
-    // Normalize email - trim whitespace and lowercase
-    const normalizedEmail = email.trim().toLowerCase();
+    // Normalize email - trim whitespace, keep uppercase domain
+    const normalizedEmail = email.trim();
+
+    // Enforce Kingston University email domain
+    if (!normalizedEmail.toLowerCase().endsWith('@kingston.ac.uk')) {
+      return res.status(400).json({ message: 'Only Kingston University emails (@KINGSTON.AC.UK) are allowed' });
+    }
 
     // Backend password length enforcement
     if (password.length < 6) {
@@ -23,7 +28,7 @@ exports.register = async (req, res) => {
     }
 
     // Check if user exists
-    const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    const [existingUsers] = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [normalizedEmail]);
     
     if (existingUsers.length > 0) {
       return res.status(409).json({ message: 'An account with this email already exists' });
@@ -33,7 +38,7 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Determine role (admin if email matches)
-    const role = normalizedEmail === 'ali.assi@kingston.ac.uk' ? 'admin' : 'student';
+    const role = normalizedEmail.toLowerCase() === 'k2355109@kingston.ac.uk' ? 'admin' : 'student';
 
     // Insert user
     const [result] = await db.query(
@@ -82,11 +87,11 @@ exports.login = async (req, res) => {
     }
 
     // Normalize email before lookup
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = email.trim();
 
-    // Get user
+    // Get user (case-insensitive lookup)
     const [users] = await db.query(
-      'SELECT * FROM users WHERE email = ?',
+      'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
       [normalizedEmail]
     );
 

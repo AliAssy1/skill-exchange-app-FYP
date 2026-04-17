@@ -194,10 +194,10 @@ const initDatabase = async () => {
     const hashedPassword = await require('bcryptjs').hash('admin123', 10);
     await connection.query(`
       INSERT INTO users (email, password, full_name, role, major, credits, reputation_score)
-      VALUES ('ali.assi@kingston.ac.uk', ?, 'Ali Assi', 'admin', 'Computer Science', 1000, 5.00)
+      VALUES ('K2355109@KINGSTON.AC.UK', ?, 'Ali Assi', 'admin', 'Computer Science', 1000, 5.00)
       ON DUPLICATE KEY UPDATE email=email
     `, [hashedPassword]);
-    console.log('✅ Admin user created (ali.assi@kingston.ac.uk / admin123)');
+    console.log('✅ Admin user created (K2355109@KINGSTON.AC.UK / admin123)');
 
     console.log('\n🎉 Database initialization completed successfully!\n');
 

@@ -23,7 +23,7 @@ async function seedDatabase() {
     // Add 2 more test users if not exist
     const testUsers = [
       {
-        email: 'sarah.johnson@kingston.ac.uk',
+        email: 'K7654321@KINGSTON.AC.UK',
         password: 'student123',
         full_name: 'Sarah Johnson',
         major: 'Computer Science',
@@ -31,7 +31,7 @@ async function seedDatabase() {
         bio: 'Love teaching programming and web development'
       },
       {
-        email: 'john.smith@kingston.ac.uk',
+        email: 'K7654322@KINGSTON.AC.UK',
         password: 'student123',
         full_name: 'John Smith',
         major: 'Business Administration',
@@ -63,13 +63,18 @@ async function seedDatabase() {
     const [allUsers] = await connection.query('SELECT id FROM users ORDER BY id LIMIT 3');
     const allUserIds = allUsers.map(u => u.id);
 
-    // Add Skills (2 per user)
+    // Add Skills (more realistic skills per user)
     console.log('\n📚 Adding skills...');
     const skills = [
       { user_id: allUserIds[0], skill_name: 'Python Programming', skill_type: 'offered', proficiency_level: 'advanced' },
-      { user_id: allUserIds[0], skill_name: 'Web Development', skill_type: 'offered', proficiency_level: 'intermediate' },
-      { user_id: allUserIds[1], skill_name: 'Graphic Design', skill_type: 'offered', proficiency_level: 'advanced' },
-      { user_id: allUserIds[1], skill_name: 'Spanish Language', skill_type: 'needed', proficiency_level: 'beginner' },
+      { user_id: allUserIds[0], skill_name: 'Machine Learning', skill_type: 'offered', proficiency_level: 'intermediate' },
+      { user_id: allUserIds[0], skill_name: 'React Development', skill_type: 'offered', proficiency_level: 'advanced' },
+      { user_id: allUserIds[1], skill_name: 'UI/UX Design', skill_type: 'offered', proficiency_level: 'advanced' },
+      { user_id: allUserIds[1], skill_name: 'Adobe Photoshop', skill_type: 'offered', proficiency_level: 'advanced' },
+      { user_id: allUserIds[1], skill_name: 'Video Editing', skill_type: 'offered', proficiency_level: 'intermediate' },
+      { user_id: allUserIds[1], skill_name: 'SQL Databases', skill_type: 'needed', proficiency_level: 'beginner' },
+      { user_id: allUserIds[2] || allUserIds[0], skill_name: 'Data Analysis', skill_type: 'offered', proficiency_level: 'intermediate' },
+      { user_id: allUserIds[2] || allUserIds[0], skill_name: 'Public Speaking', skill_type: 'offered', proficiency_level: 'advanced' },
     ];
 
     for (const skill of skills) {
@@ -91,35 +96,51 @@ async function seedDatabase() {
     const services = [
       {
         user_id: allUserIds[0],
-        title: 'Python Tutoring for Beginners',
-        description: 'Learn Python basics, data structures, and OOP concepts. Perfect for beginners!',
+        title: 'Python & Data Science Tutoring',
+        description: 'Master Python fundamentals, data structures, pandas, and NumPy. Includes hands-on projects with real datasets. Perfect for coursework help or career prep.',
         category: 'Programming',
         credits_cost: 50,
         duration_minutes: 120
       },
       {
         user_id: allUserIds[1],
-        title: 'Professional Logo Design',
-        description: 'Get a custom logo designed for your brand or project. Includes 3 revisions.',
+        title: 'Professional Logo & Brand Design',
+        description: 'Get a professional logo and brand identity package for your startup or project. Includes 3 concepts, revisions, and final files in all formats.',
         category: 'Design',
-        credits_cost: 75,
+        credits_cost: 80,
         duration_minutes: 180
       },
       {
         user_id: allUserIds[0],
-        title: 'Web Development Consultation',
-        description: 'One-on-one consultation for your web development project. HTML, CSS, JavaScript.',
+        title: 'React Native Mobile App Workshop',
+        description: 'Build your first mobile app with React Native. Learn component design, navigation, API integration, and deployment to both iOS and Android.',
         category: 'Programming',
-        credits_cost: 60,
-        duration_minutes: 60
+        credits_cost: 65,
+        duration_minutes: 90
       },
       {
         user_id: allUserIds[1],
-        title: 'Graphic Design Basics Workshop',
-        description: 'Learn Adobe Photoshop and Illustrator fundamentals in this hands-on workshop.',
+        title: 'UI/UX Design Masterclass',
+        description: 'Learn Figma, wireframing, prototyping, and user research. Create a complete app design from scratch. Industry-standard techniques covered.',
         category: 'Design',
-        credits_cost: 80,
+        credits_cost: 70,
         duration_minutes: 120
+      },
+      {
+        user_id: allUserIds[0],
+        title: 'Machine Learning Fundamentals',
+        description: 'Introduction to ML algorithms, scikit-learn, and model evaluation. Build and deploy your first predictive model with real-world data.',
+        category: 'Academics',
+        credits_cost: 90,
+        duration_minutes: 150
+      },
+      {
+        user_id: allUserIds[1],
+        title: 'Professional Video Editing',
+        description: 'Learn DaVinci Resolve or Premiere Pro from scratch. Cover cutting, transitions, color grading, audio mixing, and export settings.',
+        category: 'Design',
+        credits_cost: 55,
+        duration_minutes: 90
       }
     ];
 

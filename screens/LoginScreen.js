@@ -23,17 +23,19 @@ export default function LoginScreen({ navigation }) {
 
   const validateForm = () => {
     const newErrors = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) newErrors.email = 'Valid email address is required';
+    const kingstonEmailRegex = /^K\d{7}@KINGSTON\.AC\.UK$/i;
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!kingstonEmailRegex.test(email.trim())) {
+      newErrors.email = 'Use format: K1234567@KINGSTON.AC.UK';
+    }
     if (!password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleLogin = async () => {
-    // Normalize email before validation and submission
-    const normalizedEmail = email.trim().toLowerCase();
-    setEmail(normalizedEmail);
+    const normalizedEmail = email.trim().toUpperCase();
 
     if (validateForm()) {
       setLoading(true);
@@ -81,11 +83,18 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.formSection}>
 
+        {/* Email format hint */}
+        <View style={styles.formatHint}>
+          <Text style={styles.formatHintTitle}>📧 Login Email Format</Text>
+          <Text style={styles.formatHintExample}>K1234567@KINGSTON.AC.UK</Text>
+        </View>
+
         <InputField
-          label="Email Address"
-          placeholder="your.email@kingston.ac.uk"
+          label="Email"
+          placeholder="K1234567@KINGSTON.AC.UK"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => setEmail(text.toUpperCase())}
+          autoCapitalize="characters"
           keyboardType="email-address"
           error={errors.email}
           accessibilityLabel="Email Input"
@@ -152,7 +161,7 @@ export default function LoginScreen({ navigation }) {
 
             {/* Admin Hint */}
             <View style={styles.hintBox}>
-              <Text style={styles.hintText}>💡 Demo Admin: ali.assi@kingston.ac.uk</Text>
+              <Text style={styles.hintText}>💡 Demo Admin: K2355109@KINGSTON.AC.UK  |  Password: admin123</Text>
             </View>
           </View>
         </View>
@@ -298,5 +307,51 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.xs,
     color: AppColors.primary[700],
     textAlign: 'center',
+  },
+  emailPreview: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  emailPreviewLabel: {
+    fontSize: Typography.fontSize.xs,
+    color: AppColors.neutral[500],
+    marginBottom: 2,
+  },
+  emailPreviewText: {
+    fontSize: Typography.fontSize.base,
+    color: '#166534',
+    fontWeight: Typography.fontWeight.bold,
+    letterSpacing: 0.3,
+  },
+  formatHint: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+  },
+  formatHintTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: '#1E40AF',
+    marginBottom: 4,
+  },
+  formatHintExample: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.extrabold,
+    color: '#1D4ED8',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  formatHintSub: {
+    fontSize: Typography.fontSize.xs,
+    color: '#3B82F6',
   },
 });
