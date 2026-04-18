@@ -24,7 +24,8 @@ exports.getConversations = async (req, res) => {
           WHERE sender_id = other_user_id AND receiver_id = ? AND is_read = FALSE) as unread_count
        FROM messages m
        JOIN users u ON (CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END) = u.id
-       WHERE m.sender_id = ? OR m.receiver_id = ?
+       WHERE (m.sender_id = ? OR m.receiver_id = ?)
+         AND m.sender_id != 1 AND m.receiver_id != 1
        ORDER BY last_message_time DESC`,
       [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id]
     );

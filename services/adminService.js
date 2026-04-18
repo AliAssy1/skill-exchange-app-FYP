@@ -51,6 +51,21 @@ class AdminService {
   }
 
   /**
+   * Send an email to a user (admin only)
+   * @param {number} userId
+   * @param {string} subject
+   * @param {string} message
+   */
+  async sendEmailToUser(userId, subject, message) {
+    try {
+      const response = await api.post('/admin/send-email', { userId, subject, message });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
    * Error handler
    * @param {Error} error - Error object
    * @returns {Object} Error response

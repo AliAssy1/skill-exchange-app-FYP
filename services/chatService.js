@@ -44,7 +44,7 @@ class ChatService {
   // Get unread count
   async getUnreadCount() {
     try {
-      const response = await api.get('/chat/unread-count');
+      const response = await api.get('/chat/unread');
       return { success: true, data: response.data };
     } catch (error) {
       return this.handleError(error);

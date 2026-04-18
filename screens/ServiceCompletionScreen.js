@@ -18,7 +18,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
 };
 
 export default function ServiceCompletionScreen({ navigation, route }) {
@@ -110,10 +110,15 @@ export default function ServiceCompletionScreen({ navigation, route }) {
                   const result = await transactionService.updateTransactionStatus(transactionId, 'completed');
                   if (result.success) {
                     setCompleted(true);
-                    // Refresh user credits
                     try { await updateUser(); } catch(e) {}
-                    showAlert('Service Completed!', `${creditsAmount} credits have been transferred to ${providerName}. Please leave a review!`);
-                    navigation.navigate('FeedbackReputation', { transactionId });
+                    showAlert(
+                      'Service Completed!',
+                      `${creditsAmount} credits have been transferred to ${providerName}.\n\nWould you like to leave a review?`,
+                      [
+                        { text: 'Leave a Review', onPress: () => navigation.navigate('FeedbackReputation', { transactionId }) },
+                        { text: 'No Thanks', style: 'cancel', onPress: () => navigation.navigate('MainApp') },
+                      ]
+                    );
                   } else {
                     showAlert('Error', result.message || 'Failed to complete transaction');
                   }

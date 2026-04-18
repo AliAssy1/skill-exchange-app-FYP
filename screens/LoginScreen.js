@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
 import { AppColors, Spacing, Typography, BorderRadius, Shadows } from '../constants/theme';
@@ -14,20 +15,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { showAlert } from '../utils/alertHelper';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [errors, setErrors]     = useState({});
+  const [loading, setLoading]   = useState(false);
   const { login } = useAuth();
 
   const validateForm = () => {
     const newErrors = {};
-    const kingstonEmailRegex = /^K\d{7}@KINGSTON\.AC\.UK$/i;
+    const kingstonRegex = /^k\d+@kingston\.ac\.uk$/i;
     if (!email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!kingstonEmailRegex.test(email.trim())) {
-      newErrors.email = 'Use format: K1234567@KINGSTON.AC.UK';
+    } else if (!kingstonRegex.test(email.trim())) {
+      newErrors.email = 'Use format: k1234567@kingston.ac.uk';
     }
     if (!password) newErrors.password = 'Password is required';
     setErrors(newErrors);
@@ -35,134 +36,130 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
-    const normalizedEmail = email.trim().toUpperCase();
-
-    if (validateForm()) {
-      setLoading(true);
-      setErrors({});
-      
-      try {
-        const response = await login(normalizedEmail, password);
-        
-        // Check if admin user
-        if (response.user.role === 'admin') {
-          navigation.navigate('AdminDashboard');
-        } else {
-          navigation.navigate('ProfileSetup');
-        }
-      } catch (error) {
-        setLoading(false);
-        showAlert(
-          'Login Failed',
-          error.message || 'Invalid email or password. Please try again.'
-        );
+    if (!validateForm()) return;
+    setLoading(true);
+    setErrors({});
+    try {
+      const response = await login(email.trim().toUpperCase(), password);
+      const u = response.user;
+      if (u.role === 'admin') {
+        navigation.navigate('AdminDashboard');
+      } else {
+        navigation.navigate('MainApp');
       }
+    } catch (error) {
+      setLoading(false);
+      showAlert('Login Failed', error.message || 'Invalid email or password. Please try again.');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={AppColors.neutral[ 50]} />
-      
-      {/* Header Section */}
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={AppColors.primary[800]} />
+
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.appTitle}>SkillSwap</Text>
-          <Text style={styles.tagline}>Exchange Skills, Build Community</Text>
+        <View style={styles.logoWrap}>
+          <Ionicons name="git-compare" size={32} color={AppColors.white} />
         </View>
+        <Text style={styles.appTitle}>SkillSwap</Text>
+        <Text style={styles.tagline}>Exchange Skills · Build Community</Text>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.formCard}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Log in to continue your journey</Text>
+          <Text style={styles.cardTitle}>Welcome Back</Text>
+          <Text style={styles.cardSubtitle}>Sign in to continue your journey</Text>
 
-          <View style={styles.formSection}>
+          {/* Email format hint */}
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={18} color={AppColors.primary[600]} />
+            <Text style={styles.infoText}>
+              Example:{' '}
+              <Text style={styles.infoCode}>k1234567@kingston.ac.uk</Text>
+            </Text>
+          </View>
 
-        {/* Email format hint */}
-        <View style={styles.formatHint}>
-          <Text style={styles.formatHintTitle}>📧 Login Email Format</Text>
-          <Text style={styles.formatHintExample}>K1234567@KINGSTON.AC.UK</Text>
-        </View>
+          <InputField
+            label="Kingston Email"
+            placeholder="k1234567@kingston.ac.uk"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            error={errors.email}
+            accessibilityLabel="Email Input"
+          />
 
-        <InputField
-          label="Email"
-          placeholder="K1234567@KINGSTON.AC.UK"
-          value={email}
-          onChangeText={(text) => setEmail(text.toUpperCase())}
-          autoCapitalize="characters"
-          keyboardType="email-address"
-          error={errors.email}
-          accessibilityLabel="Email Input"
-        />
+          <InputField
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            error={errors.password}
+            accessibilityLabel="Password Input"
+          />
 
-        <InputField
-          label="Password"
-          placeholder="Enter your password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          error={errors.password}
-          accessibilityLabel="Password Input"
-        />
-
-        <View style={styles.optionsRow}>
-          <View style={styles.rememberMeRow}>
+          <View style={styles.optionsRow}>
             <TouchableOpacity
-              style={styles.checkbox}
+              style={styles.rememberRow}
               onPress={() => setRememberMe(!rememberMe)}
-              accessible
               accessibilityLabel="Remember Me"
               accessibilityRole="checkbox"
               accessibilityState={{ checked: rememberMe }}
+              activeOpacity={0.7}
             >
-              {rememberMe && <View style={styles.checkmark} />}
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && <Ionicons name="checkmark" size={12} color={AppColors.white} />}
+              </View>
+              <Text style={styles.rememberText}>Remember me</Text>
             </TouchableOpacity>
-            <Text style={styles.rememberMeText}>Remember me</Text>
+            <TouchableOpacity
+              onPress={() => showAlert('Info', 'Password reset coming soon')}
+              accessibilityLabel="Forgot Password"
+            >
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => showAlert('Info', 'Password reset coming soon')}
-            accessible
-            accessibilityLabel="Forgot Password"
-          >
-            <Text style={styles.forgotPassword}>Forgot Password?</Text>
-          </TouchableOpacity>
-        </View>
 
+          <View style={styles.buttonWrap}>
             <Button
-              title="Log In"
+              title="Sign In"
               onPress={handleLogin}
               loading={loading}
               disabled={loading}
-              accessibilityLabel="Login Button"
               size="large"
+              accessibilityLabel="Login Button"
             />
+          </View>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-            <View style={styles.linkContainer}>
-              <Text style={styles.linkText}>Don't have an account? </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Registration')}
-                accessible
-                accessibilityLabel="Go to Registration"
-              >
-                <Text style={styles.linkHighlight}>Sign Up</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>Don't have an account? </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Registration')}
+              accessibilityLabel="Go to Registration"
+            >
+              <Text style={styles.signupLink}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Admin Hint */}
-            <View style={styles.hintBox}>
-              <Text style={styles.hintText}>💡 Demo Admin: K2355109@KINGSTON.AC.UK  |  Password: admin123</Text>
-            </View>
+          <View style={styles.hintBox}>
+            <Ionicons name="shield-checkmark-outline" size={14} color={AppColors.primary[600]} />
+            <Text style={styles.hintText}>
+              Kingston University students only. Use your k-number email to sign in.
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -171,187 +168,130 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AppColors.neutral[50],
-  },
+  root: { flex: 1, backgroundColor: AppColors.neutral[50] },
+
+  // Header
   header: {
-    backgroundColor: AppColors.primary[600],
-    paddingTop: Spacing['4xl'],
-    paddingBottom: Spacing['3xl'],
+    backgroundColor: AppColors.primary[700],
+    paddingTop: 64,
+    paddingBottom: 36,
     paddingHorizontal: Spacing.xl,
     borderBottomLeftRadius: BorderRadius['2xl'],
     borderBottomRightRadius: BorderRadius['2xl'],
+    alignItems: 'center',
     ...Shadows.lg,
   },
-  headerContent: {
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   appTitle: {
     fontSize: Typography.fontSize['4xl'],
     fontWeight: Typography.fontWeight.extrabold,
     color: AppColors.white,
-    marginBottom: Spacing.xs,
     letterSpacing: 0.5,
   },
   tagline: {
-    fontSize: Typography.fontSize.sm,
-    color: AppColors.primary[100],
+    fontSize: Typography.fontSize.xs,
+    color: AppColors.primary[200],
     fontWeight: Typography.fontWeight.medium,
+    marginTop: 6,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: Spacing.xl,
-  },
+
+  scroll: { flex: 1 },
+  content: { padding: Spacing.xl, paddingBottom: 48 },
+
   formCard: {
     backgroundColor: AppColors.white,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     ...Shadows.md,
   },
-  title: {
-    fontSize: Typography.fontSize['3xl'],
+  cardTitle: {
+    fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.bold,
     color: AppColors.neutral[900],
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
   },
-  subtitle: {
-    fontSize: Typography.fontSize.base,
-    color: AppColors.neutral[600],
+  cardSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    color: AppColors.neutral[500],
     marginBottom: Spacing.xl,
   },
-  formSection: {
-    marginTop: Spacing.base,
+
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: AppColors.primary[50],
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: AppColors.primary[200],
   },
+  infoText: { flex: 1, fontSize: Typography.fontSize.xs, color: AppColors.primary[700], lineHeight: 18 },
+  infoCode: { fontWeight: Typography.fontWeight.bold, letterSpacing: 0.3 },
+
   optionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xl,
     marginTop: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
-  rememberMeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
+    borderRadius: BorderRadius.sm,
     borderWidth: 2,
     borderColor: AppColors.primary[400],
-    borderRadius: BorderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: AppColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  checkmark: {
-    width: 14,
-    height: 14,
-    backgroundColor: AppColors.primary[600],
-    borderRadius: 3,
-  },
-  rememberMeText: {
-    marginLeft: Spacing.sm,
-    fontSize: Typography.fontSize.sm,
-    color: AppColors.neutral[700],
-    fontWeight: Typography.fontWeight.medium,
-  },
-  forgotPassword: {
-    fontSize: Typography.fontSize.sm,
-    color: AppColors.primary[600],
+  checkboxChecked: { backgroundColor: AppColors.primary[600], borderColor: AppColors.primary[600] },
+  rememberText: { fontSize: Typography.fontSize.sm, color: AppColors.neutral[700], fontWeight: Typography.fontWeight.medium },
+  forgotText: { fontSize: Typography.fontSize.sm, color: AppColors.primary[600], fontWeight: Typography.fontWeight.semibold },
+
+  buttonWrap: { marginBottom: Spacing.xl },
+
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.lg },
+  dividerLine: { flex: 1, height: 1, backgroundColor: AppColors.neutral[100] },
+  dividerText: {
+    marginHorizontal: Spacing.md,
+    fontSize: Typography.fontSize.xs,
+    color: AppColors.neutral[400],
     fontWeight: Typography.fontWeight.semibold,
+    letterSpacing: 1,
   },
-  divider: {
+
+  signupRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: Spacing.xl },
+  signupText: { fontSize: Typography.fontSize.sm, color: AppColors.neutral[500] },
+  signupLink: { fontSize: Typography.fontSize.sm, color: AppColors.primary[600], fontWeight: Typography.fontWeight.bold },
+
+  hintBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: Spacing.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: AppColors.neutral[200],
-  },
-  dividerText: {
-    marginHorizontal: Spacing.base,
-    fontSize: Typography.fontSize.sm,
-    color: AppColors.neutral[400],
-    fontWeight: Typography.fontWeight.medium,
-  },
-  linkContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: Spacing.base,
-  },
-  linkText: {
-    fontSize: Typography.fontSize.base,
-    color:AppColors.neutral[600],
-  },
-  linkHighlight: {
-    fontSize: Typography.fontSize.base,
-    color: AppColors.primary[600],
-    fontWeight: Typography.fontWeight.bold,
-  },
-  hintBox: {
-    marginTop: Spacing.xl,
+    gap: 6,
     padding: Spacing.md,
     backgroundColor: AppColors.primary[50],
-    borderRadius: BorderRadius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: AppColors.primary[400],
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: AppColors.primary[100],
   },
   hintText: {
-    fontSize: Typography.fontSize.xs,
+    flex: 1,
+    fontSize: 11,
     color: AppColors.primary[700],
-    textAlign: 'center',
-  },
-  emailPreview: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  emailPreviewLabel: {
-    fontSize: Typography.fontSize.xs,
-    color: AppColors.neutral[500],
-    marginBottom: 2,
-  },
-  emailPreviewText: {
-    fontSize: Typography.fontSize.base,
-    color: '#166534',
-    fontWeight: Typography.fontWeight.bold,
-    letterSpacing: 0.3,
-  },
-  formatHint: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    alignItems: 'center',
-  },
-  formatHintTitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
-    color: '#1E40AF',
-    marginBottom: 4,
-  },
-  formatHintExample: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.extrabold,
-    color: '#1D4ED8',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  formatHintSub: {
-    fontSize: Typography.fontSize.xs,
-    color: '#3B82F6',
+    lineHeight: 16,
   },
 });

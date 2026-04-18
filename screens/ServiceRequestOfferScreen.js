@@ -1,75 +1,78 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  View,
   ScrollView,
   StyleSheet,
   Text,
+  View,
   TouchableOpacity,
-  ActivityIndicator,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import InputField from '../components/InputField';
-import { showAlert } from '../utils/alertHelper';
 import Button from '../components/Button';
-import Card from '../components/Card';
+import PlaceholderAvatar from '../components/PlaceholderAvatar';
+import { useAuth } from '../contexts/AuthContext';
 import serviceService from '../services/serviceService';
 import transactionService from '../services/transactionService';
-import { useAuth } from '../contexts/AuthContext';
+import { showAlert } from '../utils/alertHelper';
+import { AppColors, Spacing, Typography, BorderRadius, Shadows } from '../constants/theme';
 
-const COLORS = {
-  white: '#FFFFFF',
-  background: '#F5F5F5',
-  text: '#1F2937',
-  secondary: '#6B7280',
-  border: '#D1D5DB',
-  primary: '#4B5563',
+const CATEGORY_ICONS = {
+  Programming: 'code-slash',
+  Design:      'color-palette',
+  Languages:   'language',
+  Music:       'musical-notes',
+  Academics:   'school',
+  Business:    'briefcase',
+  Fitness:     'fitness',
 };
 
 export default function ServiceRequestOfferScreen({ route, navigation }) {
   const { service = {}, mode = 'view' } = route.params || {};
   const { user, updateUser } = useAuth();
-  const [message, setMessage] = useState('');
-  const [offerTitle, setOfferTitle] = useState('');
-  const [offerDescription, setOfferDescription] = useState('');
+  const [message, setMessage]             = useState('');
+  const [offerTitle, setOfferTitle]       = useState('');
+  const [offerDesc, setOfferDesc]         = useState('');
   const [offerCategory, setOfferCategory] = useState('');
-  const [offerCredits, setOfferCredits] = useState('');
+  const [offerCredits, setOfferCredits]   = useState('');
   const [skillsRequired, setSkillsRequired] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]             = useState(false);
   const [requestLoading, setRequestLoading] = useState(false);
 
-  const isViewMode = mode === 'view';
+  const isViewMode  = mode === 'view';
   const userCredits = user?.credits || 0;
   const serviceCost = service?.credits_cost || 0;
-  const canAfford = userCredits >= serviceCost;
+  const canAfford   = userCredits >= serviceCost;
+  const isOwn       = service.user_id != null && Number(service.user_id) === Number(user?.id);
+  const catIcon     = CATEGORY_ICONS[service.category] || 'apps';
 
   const handleRequestService = async () => {
     if (!canAfford) {
-      showAlert('Insufficient Credits', `You need ${serviceCost} credits but only have ${userCredits}. Earn more credits by offering your skills to other students!`);
+      showAlert(
+        'Insufficient Credits',
+        `You need ${serviceCost} credits but only have ${userCredits}. Earn more by offering your skills!`
+      );
       return;
     }
-
     setRequestLoading(true);
     try {
       const result = await transactionService.createTransaction({
         service_id: service.id,
         notes: message,
       });
-
       if (result.success) {
-        // Refresh user data to update credit balance
-        try { await updateUser(); } catch(e) {}
-        showAlert('Service Requested!', `You have requested "${service.title}". ${serviceCost} credits will be deducted when the session is completed.`);
-        navigation.navigate('ServiceCompletion', {
-          transactionId: result.data?.transaction_id || result.transaction_id,
-          serviceTitle: service.title,
-          providerName: service.provider_name || service.user || 'Provider',
-          creditsAmount: serviceCost,
-          status: 'Pending',
-        });
+        try { await updateUser(); } catch { /* ignore */ }
+        showAlert(
+          'Request Sent!',
+          `Your request for "${service.title}" has been sent to the provider. They will accept or decline it shortly.`
+        );
+        navigation.goBack();
       } else {
         showAlert('Error', result.message || 'Failed to request service');
       }
     } catch (error) {
-      console.error('Request service error:', error);
       showAlert('Error', error.message || 'Failed to request service. Please try again.');
     } finally {
       setRequestLoading(false);
@@ -77,265 +80,512 @@ export default function ServiceRequestOfferScreen({ route, navigation }) {
   };
 
   const handlePostService = async () => {
-    if (!offerTitle || !offerDescription || !offerCategory || !offerCredits) {
-      showAlert('Error', 'Please fill in all required fields');
+    if (!offerTitle || !offerDesc || !offerCategory || !offerCredits) {
+      showAlert('Missing Fields', 'Please fill in all required fields');
       return;
     }
-
     setLoading(true);
     try {
-      const serviceData = {
+      const result = await serviceService.createService({
         title: offerTitle,
-        description: offerDescription,
+        description: offerDesc,
         category: offerCategory,
         skill_required: skillsRequired,
         credits_cost: parseInt(offerCredits),
-        duration_minutes: 60
-      };
-
-      const result = await serviceService.createService(serviceData);
-      
+        duration_minutes: 60,
+      });
       if (result.success) {
-        showAlert('Success', 'Service posted successfully!');
-        navigation.navigate('Browse');
+        navigation.goBack();
+        showAlert('Success', 'Your service has been posted!');
       } else {
         showAlert('Error', result.message || 'Failed to post service');
       }
-    } catch (error) {
-      console.error('Post service error:', error);
+    } catch {
       showAlert('Error', 'Failed to post service. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.contentContainer}>
-        {isViewMode ? (
-          <>
-            <Text style={styles.title}>{service.title || 'Service Details'}</Text>
+  if (isViewMode) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        <StatusBar barStyle="light-content" backgroundColor={AppColors.primary[800]} />
 
-            <Card style={styles.creditCard}>
-              <View style={styles.creditRow}>
-                <View style={styles.creditItem}>
-                  <Text style={styles.creditLabel}>Service Cost</Text>
-                  <Text style={styles.creditValue}>💰 {serviceCost} credits</Text>
-                </View>
-                <View style={styles.creditDivider} />
-                <View style={styles.creditItem}>
-                  <Text style={styles.creditLabel}>Your Balance</Text>
-                  <Text style={[styles.creditValue, !canAfford && styles.creditInsufficient]}>
-                    💎 {userCredits} credits
-                  </Text>
-                </View>
+        {/* Hero header */}
+        <View style={styles.heroHeader}>
+          <View style={styles.catIconWrap}>
+            <Ionicons name={catIcon} size={28} color={AppColors.white} />
+          </View>
+          <Text style={styles.heroTitle} numberOfLines={2}>{service.title || 'Service Details'}</Text>
+          <View style={styles.heroBadgeRow}>
+            {service.category ? (
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>{service.category}</Text>
               </View>
-              {!canAfford && (
-                <Text style={styles.insufficientText}>
-                  ⚠️ You need {serviceCost - userCredits} more credits to request this service
-                </Text>
-              )}
-            </Card>
+            ) : null}
+            {service.status === 'active' && (
+              <View style={[styles.heroBadge, styles.heroBadgeGreen]}>
+                <View style={styles.activeDot} />
+                <Text style={[styles.heroBadgeText, { color: '#ECFDF5' }]}>Active</Text>
+              </View>
+            )}
+          </View>
+        </View>
 
-            <Card>
-              <Text style={styles.label}>Service Provider</Text>
-              <Text style={styles.value}>{service.provider_name || service.user || 'Unknown'}</Text>
-            </Card>
-
-            <Card>
-              <Text style={styles.label}>Category</Text>
-              <Text style={styles.value}>{service.category}</Text>
-            </Card>
-
-            <Card>
-              <Text style={styles.label}>Rating</Text>
-              <Text style={styles.value}>★ {service.rating || 'N/A'}</Text>
-            </Card>
-
-            <Text style={styles.sectionTitle}>About This Service</Text>
-            <Card>
-              <Text style={styles.descriptionText}>
-                {service.description || `This service offers professional assistance in ${service.title?.toLowerCase()}. Perfect for students looking to learn or exchange their own skills.`}
-              </Text>
-            </Card>
-
-            <InputField
-              label="Your Message (Optional)"
-              placeholder="Introduce yourself and why you're interested..."
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={4}
-              accessibilityLabel="Message to Service Provider"
-            />
-
-            <View style={styles.buttonGroup}>
-              <Button
-                title={requestLoading ? 'Requesting...' : `Request Service (${serviceCost} credits)`}
-                onPress={handleRequestService}
-                disabled={requestLoading || !canAfford}
-                loading={requestLoading}
-                accessibilityLabel="Request This Service"
-              />
-              <Button
-                title="Offer Your Service"
-                variant="secondary"
-                onPress={() => {
-                  navigation.navigate('ServiceRequestOffer', { mode: 'create' });
-                }}
-                accessibilityLabel="Offer Your Own Service"
-              />
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Credit balance card */}
+          <View style={styles.creditsCard}>
+            <View style={styles.creditsItem}>
+              <Text style={styles.creditsLabel}>Service Cost</Text>
+              <View style={styles.creditsValueRow}>
+                <Ionicons name="diamond" size={18} color={AppColors.primary[600]} />
+                <Text style={styles.creditsValue}>{serviceCost}</Text>
+                <Text style={styles.creditsUnit}>credits</Text>
+              </View>
             </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Create Service Offer</Text>
-            <Text style={styles.subtitle}>
-              Offer a service to other students
+            <View style={styles.creditsDivider} />
+            <View style={styles.creditsItem}>
+              <Text style={styles.creditsLabel}>Your Balance</Text>
+              <View style={styles.creditsValueRow}>
+                <Ionicons name="wallet" size={18} color={canAfford ? '#059669' : AppColors.error[600]} />
+                <Text style={[styles.creditsValue, { color: canAfford ? '#059669' : AppColors.error[600] }]}>
+                  {userCredits}
+                </Text>
+                <Text style={styles.creditsUnit}>credits</Text>
+              </View>
+            </View>
+          </View>
+          {!canAfford && (
+            <View style={styles.insufficientBanner}>
+              <Ionicons name="warning" size={16} color={AppColors.warning[600]} />
+              <Text style={styles.insufficientText}>
+                You need {serviceCost - userCredits} more credits to request this service
+              </Text>
+            </View>
+          )}
+
+          {/* Provider card */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Service Provider</Text>
+            <View style={styles.providerRow}>
+              <PlaceholderAvatar
+                size={52}
+                initials={(service.provider_name || 'U').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                name={service.provider_name}
+              />
+              <View style={styles.providerInfo}>
+                <Text style={styles.providerName}>{service.provider_name || 'Unknown'}</Text>
+                {service.rating > 0 ? (
+                  <View style={styles.ratingRow}>
+                    <Ionicons name="star" size={13} color="#D97706" />
+                    <Text style={styles.ratingText}>{parseFloat(service.rating).toFixed(1)} rating</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.newProvider}>New provider</Text>
+                )}
+              </View>
+              {!isOwn && (
+                <TouchableOpacity
+                  style={styles.msgBtn}
+                  onPress={() =>
+                    navigation.navigate('Chat', {
+                      userId: service.user_id,
+                      userName: service.provider_name || 'Provider',
+                    })
+                  }
+                >
+                  <Ionicons name="chatbubble-outline" size={18} color={AppColors.primary[600]} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* About */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>About This Service</Text>
+            <Text style={styles.descText}>
+              {service.description ||
+                `This service offers professional assistance in ${(service.title || '').toLowerCase()}. Perfect for students looking to learn or exchange skills.`}
             </Text>
+          </View>
 
-            <InputField
-              label="Service Title *"
-              placeholder="What service are you offering?"
-              value={offerTitle}
-              onChangeText={setOfferTitle}
-              accessibilityLabel="Service Title Input"
-            />
+          {/* Details grid */}
+          <View style={styles.detailsGrid}>
+            {[
+              { icon: 'apps', label: 'Category', value: service.category || '—' },
+              { icon: 'diamond-outline', label: 'Credits', value: `${serviceCost} credits` },
+              { icon: 'time-outline', label: 'Duration',
+                value: service.duration_minutes
+                  ? service.duration_minutes < 60
+                    ? `${service.duration_minutes}min`
+                    : `${(service.duration_minutes / 60).toFixed(1)}h`
+                  : '1h' },
+              { icon: 'star-outline', label: 'Rating', value: service.rating ? `${parseFloat(service.rating).toFixed(1)} / 5` : 'No reviews' },
+            ].map(({ icon, label, value }) => (
+              <View key={label} style={styles.detailItem}>
+                <View style={styles.detailIconWrap}>
+                  <Ionicons name={icon} size={18} color={AppColors.primary[600]} />
+                </View>
+                <Text style={styles.detailLabel}>{label}</Text>
+                <Text style={styles.detailValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
 
-            <InputField
-              label="Description *"
-              placeholder="Describe your service in detail..."
-              value={offerDescription}
-              onChangeText={setOfferDescription}
-              multiline
-              numberOfLines={5}
-              accessibilityLabel="Service Description Input"
-            />
+          {/* Message input */}
+          <InputField
+            label="Your Message (Optional)"
+            placeholder="Introduce yourself and why you're interested..."
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            numberOfLines={4}
+            accessibilityLabel="Message to Service Provider"
+          />
 
-            <InputField
-              label="Category *"
-              placeholder="e.g., Programming, Design, Language"
-              value={offerCategory}
-              onChangeText={setOfferCategory}
-              accessibilityLabel="Category Input"
-            />
+          {/* Action buttons */}
+          <View style={styles.actionSection}>
+            {isOwn ? (
+              <View style={styles.ownServiceBanner}>
+                <Ionicons name="information-circle-outline" size={20} color={AppColors.primary[600]} />
+                <Text style={styles.ownServiceText}>
+                  This is your service. Log into a different account to request services from others.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Button
+                  title={requestLoading ? 'Requesting...' : `Request Service · ${serviceCost} credits`}
+                  onPress={handleRequestService}
+                  disabled={requestLoading || !canAfford}
+                  loading={requestLoading}
+                  size="large"
+                  accessibilityLabel="Request This Service"
+                />
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={() =>
+                    navigation.navigate('Chat', {
+                      userId: service.user_id,
+                      userName: service.provider_name || 'Provider',
+                    })
+                  }
+                >
+                  <Ionicons name="chatbubble-outline" size={18} color={AppColors.primary[600]} />
+                  <Text style={styles.secondaryBtnText}>Message Provider</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              style={styles.ghostBtn}
+              onPress={() => navigation.navigate('ServiceRequestOffer', { mode: 'create' })}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={AppColors.neutral[600]} />
+              <Text style={styles.ghostBtnText}>Offer Your Own Service</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
 
-            <InputField
-              label="Credits Cost *"
-              placeholder="How many credits to charge?"
-              value={offerCredits}
-              onChangeText={setOfferCredits}
-              keyboardType="numeric"
-              accessibilityLabel="Credits Cost Input"
-            />
-
-            <InputField
-              label="Skills Required (Optional)"
-              placeholder="What skills do students need?"
-              value={skillsRequired}
-              onChangeText={setSkillsRequired}
-              accessibilityLabel="Skills Required Input"
-            />
-
-            <Button
-              title="Post Service Offer"
-              onPress={handlePostService}
-              loading={loading}
-              disabled={loading}
-              accessibilityLabel="Post Service Offer"
-            />
-          </>
-        )}
+  // ── Create mode ──────────────────────────────────────────────────────
+  return (
+    <KeyboardAvoidingView
+      style={styles.createRoot}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+    >
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={styles.createContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.createHeader}>
+        <View style={styles.createHeaderIcon}>
+          <Ionicons name="add-circle" size={28} color={AppColors.primary[600]} />
+        </View>
+        <View>
+          <Text style={styles.createTitle}>Create a Service</Text>
+          <Text style={styles.createSub}>Share your skills with other students</Text>
+        </View>
       </View>
+
+      <InputField
+        label="Service Title *"
+        placeholder="What service are you offering?"
+        value={offerTitle}
+        onChangeText={setOfferTitle}
+        accessibilityLabel="Service Title Input"
+      />
+      <InputField
+        label="Description *"
+        placeholder="Describe your service in detail..."
+        value={offerDesc}
+        onChangeText={setOfferDesc}
+        multiline
+        numberOfLines={5}
+        accessibilityLabel="Service Description Input"
+      />
+      <InputField
+        label="Category *"
+        placeholder="e.g. Programming, Design, Languages"
+        value={offerCategory}
+        onChangeText={setOfferCategory}
+        accessibilityLabel="Category Input"
+      />
+      <InputField
+        label="Credits Cost *"
+        placeholder="How many credits to charge?"
+        value={offerCredits}
+        onChangeText={setOfferCredits}
+        keyboardType="numeric"
+        accessibilityLabel="Credits Cost Input"
+      />
+      <InputField
+        label="Skills Required (Optional)"
+        placeholder="Any prerequisites for students?"
+        value={skillsRequired}
+        onChangeText={setSkillsRequired}
+        accessibilityLabel="Skills Required Input"
+      />
+
+      <View style={styles.createFootnote}>
+        <Ionicons name="information-circle-outline" size={14} color={AppColors.neutral[400]} />
+        <Text style={styles.createFootnoteText}>
+          Students will be able to see and request your service after it's posted.
+        </Text>
+      </View>
+
+      <Button
+        title="Post Service"
+        onPress={handlePostService}
+        loading={loading}
+        disabled={loading}
+        size="large"
+        accessibilityLabel="Post Service Offer"
+      />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.white,
+  root: { flex: 1, backgroundColor: AppColors.neutral[50] },
+
+  // Hero header (view mode)
+  heroHeader: {
+    backgroundColor: AppColors.primary[700],
+    paddingTop: 20,
+    paddingBottom: 28,
+    paddingHorizontal: Spacing.xl,
+    alignItems: 'center',
   },
-  contentContainer: {
-    padding: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.secondary,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.secondary,
-    marginBottom: 4,
-  },
-  value: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 16,
+  catIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
   },
-  descriptionText: {
-    fontSize: 14,
-    color: COLORS.secondary,
-    lineHeight: 20,
+  heroTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.extrabold,
+    color: AppColors.white,
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 28,
   },
-  buttonGroup: {
-    marginTop: 20,
-    gap: 12,
-  },
-  creditCard: {
-    marginBottom: 16,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  creditRow: {
+  heroBadgeRow: { flexDirection: 'row', gap: 8 },
+  heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
-  creditItem: {
-    flex: 1,
+  heroBadgeGreen: { backgroundColor: 'rgba(16,185,129,0.3)' },
+  heroBadgeText: { fontSize: 12, fontWeight: Typography.fontWeight.semibold, color: AppColors.white },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#6EE7B7' },
+
+  scroll: { flex: 1 },
+  scrollContent: { padding: Spacing.base, paddingBottom: 40 },
+
+  // Credits card
+  creditsCard: {
+    flexDirection: 'row',
+    backgroundColor: AppColors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
+    marginBottom: Spacing.sm,
+    ...Shadows.md,
+  },
+  creditsItem: { flex: 1, alignItems: 'center' },
+  creditsDivider: { width: 1, backgroundColor: AppColors.neutral[100], marginVertical: 4 },
+  creditsLabel: { fontSize: Typography.fontSize.xs, color: AppColors.neutral[400], marginBottom: 6, fontWeight: Typography.fontWeight.medium },
+  creditsValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  creditsValue: { fontSize: 22, fontWeight: Typography.fontWeight.extrabold, color: AppColors.neutral[900] },
+  creditsUnit: { fontSize: Typography.fontSize.xs, color: AppColors.neutral[400] },
+
+  insufficientBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: AppColors.warning[50],
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  creditDivider: {
-    width: 1,
+  insufficientText: { flex: 1, fontSize: Typography.fontSize.xs, color: AppColors.warning[600], fontWeight: Typography.fontWeight.medium },
+
+  // Sections
+  section: {
+    backgroundColor: AppColors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
+  },
+  sectionLabel: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: AppColors.neutral[400],
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: Spacing.md,
+  },
+  providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  providerInfo: { flex: 1 },
+  providerName: { fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold, color: AppColors.neutral[900] },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  ratingText: { fontSize: Typography.fontSize.xs, color: '#92400E', fontWeight: Typography.fontWeight.medium },
+  newProvider: { fontSize: Typography.fontSize.xs, color: AppColors.neutral[400], marginTop: 3 },
+  msgBtn: {
+    width: 40,
     height: 40,
-    backgroundColor: COLORS.border,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: AppColors.primary[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.primary[50],
   },
-  creditLabel: {
-    fontSize: 12,
-    color: COLORS.secondary,
-    marginBottom: 4,
+  descText: { fontSize: Typography.fontSize.sm, color: AppColors.neutral[600], lineHeight: 22 },
+
+  // Details grid
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: Spacing.sm,
   },
-  creditValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#059669',
+  detailItem: {
+    width: '47%',
+    backgroundColor: AppColors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: 4,
+    ...Shadows.sm,
   },
-  creditInsufficient: {
-    color: '#DC2626',
+  detailIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: AppColors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
-  insufficientText: {
-    fontSize: 13,
-    color: '#DC2626',
-    textAlign: 'center',
-    marginTop: 12,
-    fontWeight: '500',
+  detailLabel: { fontSize: 11, color: AppColors.neutral[400], fontWeight: Typography.fontWeight.medium },
+  detailValue: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.bold, color: AppColors.neutral[800], textAlign: 'center' },
+
+  // Action buttons
+  actionSection: { marginTop: Spacing.sm, gap: 10 },
+  ownServiceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: AppColors.primary[50],
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
+    borderWidth: 1,
+    borderColor: AppColors.primary[200],
   },
+  ownServiceText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    color: AppColors.primary[700],
+    lineHeight: 20,
+  },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: AppColors.primary[300],
+    backgroundColor: AppColors.primary[50],
+  },
+  secondaryBtnText: { fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.semibold, color: AppColors.primary[700] },
+  ghostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: AppColors.neutral[200],
+    backgroundColor: AppColors.white,
+  },
+  ghostBtnText: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semibold, color: AppColors.neutral[600] },
+
+  // Create mode
+  createRoot: { flex: 1, backgroundColor: AppColors.neutral[50] },
+  createContent: { padding: Spacing.base, paddingBottom: 40 },
+  createHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: AppColors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
+    marginBottom: Spacing.base,
+    ...Shadows.sm,
+  },
+  createHeaderIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: AppColors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createTitle: { fontSize: Typography.fontSize.xl, fontWeight: Typography.fontWeight.bold, color: AppColors.neutral[900] },
+  createSub: { fontSize: Typography.fontSize.xs, color: AppColors.neutral[400], marginTop: 2 },
+  createFootnote: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'flex-start',
+    padding: Spacing.md,
+    backgroundColor: AppColors.neutral[100],
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.base,
+  },
+  createFootnoteText: { flex: 1, fontSize: 12, color: AppColors.neutral[500], lineHeight: 18 },
 });

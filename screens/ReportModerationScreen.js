@@ -5,7 +5,9 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -19,7 +21,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
 };
 
 const reportReasons = [
@@ -36,6 +38,23 @@ export default function ReportModerationScreen({ navigation }) {
   const [serviceRef, setServiceRef] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [screenshots, setScreenshots] = useState([]);
+
+  const handleAttachScreenshot = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Permission Required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setScreenshots(prev => [...prev, ...result.assets.map(a => a.uri)]);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!selectedReason || !description.trim()) {
@@ -160,12 +179,27 @@ export default function ReportModerationScreen({ navigation }) {
         <Card style={styles.attachmentCard}>
           <TouchableOpacity
             style={styles.attachmentButton}
-            onPress={() => showAlert('Info', 'Screenshot upload coming soon')}
+            onPress={handleAttachScreenshot}
             accessible
             accessibilityLabel="Attach Screenshot"
           >
             <Text style={styles.attachmentButtonText}>📎 Attach Screenshot</Text>
           </TouchableOpacity>
+          {screenshots.length > 0 && (
+            <View style={styles.screenshotRow}>
+              {screenshots.map((uri, i) => (
+                <View key={i} style={styles.screenshotContainer}>
+                  <Image source={{ uri }} style={styles.screenshotThumb} />
+                  <TouchableOpacity
+                    style={styles.removeScreenshot}
+                    onPress={() => setScreenshots(prev => prev.filter((_, idx) => idx !== i))}
+                  >
+                    <Text style={styles.removeScreenshotText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
         </Card>
 
         <Button
@@ -271,5 +305,37 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  screenshotRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  screenshotContainer: {
+    position: 'relative',
+  },
+  screenshotThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  removeScreenshot: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeScreenshotText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

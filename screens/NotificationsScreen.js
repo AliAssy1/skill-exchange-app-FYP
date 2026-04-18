@@ -17,7 +17,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
 };
 
 export default function NotificationsScreen({ navigation }) {

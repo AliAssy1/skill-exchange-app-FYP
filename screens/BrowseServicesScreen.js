@@ -8,39 +8,29 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Image,
 } from 'react-native';
-import Card from '../components/Card';
+import { Ionicons } from '@expo/vector-icons';
 import PlaceholderAvatar from '../components/PlaceholderAvatar';
 import serviceService from '../services/serviceService';
+import { useAuth } from '../contexts/AuthContext';
+import { AppColors, Spacing, Typography, BorderRadius, Shadows } from '../constants/theme';
 import { showAlert } from '../utils/alertHelper';
 
-const COLORS = {
-  white: '#FFFFFF',
-  background: '#F8FAFC',
-  text: '#1F2937',
-  secondary: '#6B7280',
-  border: '#E5E7EB',
-  primary: '#6366F1',
-  primaryLight: '#EEF2FF',
-  success: '#059669',
-  successLight: '#D1FAE5',
-  warning: '#F59E0B',
-  warningLight: '#FEF3C7',
-};
-
 const CATEGORY_CONFIG = {
-  All: { icon: '📋', color: '#6366F1' },
-  Programming: { icon: '💻', color: '#3B82F6' },
-  Languages: { icon: '🌍', color: '#10B981' },
-  Design: { icon: '🎨', color: '#F59E0B' },
-  Music: { icon: '🎵', color: '#EC4899' },
-  Academics: { icon: '📚', color: '#8B5CF6' },
+  All:          { icon: 'apps',          color: '#6366F1' },
+  Programming:  { icon: 'code-slash',    color: '#3B82F6' },
+  Languages:    { icon: 'language',      color: '#10B981' },
+  Design:       { icon: 'color-palette', color: '#F59E0B' },
+  Music:        { icon: 'musical-notes', color: '#EC4899' },
+  Academics:    { icon: 'school',        color: '#8B5CF6' },
+  Business:     { icon: 'briefcase',     color: '#0891B2' },
+  Fitness:      { icon: 'fitness',       color: '#EF4444' },
 };
 
-const categories = ['All', 'Programming', 'Languages', 'Design', 'Music', 'Academics'];
+const CATEGORIES = Object.keys(CATEGORY_CONFIG);
 
 export default function BrowseServicesScreen({ navigation, route }) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [services, setServices] = useState([]);
@@ -49,11 +39,9 @@ export default function BrowseServicesScreen({ navigation, route }) {
 
   useEffect(() => {
     if (aiServices) {
-      // Use AI-recommended services
       setServices(aiServices);
       setLoading(false);
     } else {
-      // Fetch all services normally
       fetchServices();
     }
   }, [aiServices]);
@@ -67,439 +55,388 @@ export default function BrowseServicesScreen({ navigation, route }) {
       } else {
         showAlert('Error', result.message);
       }
-    } catch (error) {
-      console.error('Error fetching services:', error);
+    } catch {
       showAlert('Error', 'Failed to load services');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredServices = services.filter((service) => {
-    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || service.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  const filteredServices = services.filter((s) => {
+    const matchSearch = (s.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchCat = selectedCategory === 'All' || s.category === selectedCategory;
+    const notOwn = !user?.id || Number(s.user_id) !== Number(user.id);
+    return matchSearch && matchCat && notOwn;
   });
 
-  const getInitials = (name) => {
-    if (!name) return '??';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
-  const getCategoryConfig = (category) => {
-    return CATEGORY_CONFIG[category] || CATEGORY_CONFIG['All'];
-  };
+  const getInitials = (name) =>
+    (name || '??').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.contentContainer}>
-        <View style={styles.headerSection}>
-          <Text style={styles.title}>Browse Services</Text>
-          <Text style={styles.subtitle}>Discover skills from fellow students</Text>
-        </View>
-        
-        {aiServices && (
-          <View style={styles.aiBanner}>
-            <Text style={styles.aiBannerIcon}>🤖</Text>
-            <View>
-              <Text style={styles.aiBannerTitle}>AI Recommended</Text>
-              <Text style={styles.aiBannerText}>Personalized matches based on your profile</Text>
-            </View>
-          </View>
-        )}
-
+    <View style={styles.root}>
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
         <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Ionicons name="search" size={18} color={AppColors.neutral[400]} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search services..."
-            placeholderTextColor={COLORS.secondary}
+            placeholderTextColor={AppColors.neutral[400]}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            accessible
-            accessibilityLabel="Search Services by Name"
+            accessibilityLabel="Search Services"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+              <Ionicons name="close-circle" size={18} color={AppColors.neutral[400]} />
+            </TouchableOpacity>
+          )}
         </View>
+      </View>
 
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Categories</Text>
-          <FlatList
-            data={categories}
-            keyExtractor={(item) => item}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => {
-              const config = getCategoryConfig(item);
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    selectedCategory === item && { backgroundColor: config.color, borderColor: config.color },
-                  ]}
-                  onPress={() => setSelectedCategory(item)}
-                  accessible
-                  accessibilityLabel={`Filter by ${item}`}
-                >
-                  <Text style={styles.filterChipIcon}>{config.icon}</Text>
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      selectedCategory === item && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading services...</Text>
-          </View>
-        ) : (
-          <View style={styles.servicesSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Available Services
-              </Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{filteredServices.length}</Text>
-              </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* AI banner */}
+        {aiServices && (
+          <View style={styles.aiBanner}>
+            <View style={styles.aiBannerIcon}>
+              <Ionicons name="sparkles" size={20} color={AppColors.primary[600]} />
             </View>
-            {filteredServices.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyText}>No services found</Text>
-                <Text style={styles.emptySubtext}>Try adjusting your search or category filter</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredServices}
-                keyExtractor={(item) => item.id.toString()}
-                scrollEnabled={false}
-                renderItem={({ item }) => {
-                  const catConfig = getCategoryConfig(item.category);
-                  return (
-                    <Card
-                      onPress={() =>
-                        navigation.navigate('ServiceRequestOffer', {
-                          service: item,
-                          mode: 'view',
-                        })
-                      }
-                    >
-                      <View style={styles.serviceCardHeader}>
-                        <View style={[styles.categoryIconBadge, { backgroundColor: catConfig.color + '15' }]}>
-                          <Text style={styles.categoryIconText}>{catConfig.icon}</Text>
-                        </View>
-                        <View style={styles.serviceHeaderInfo}>
-                          <Text style={styles.serviceTitle}>{item.title}</Text>
-                          <View style={[styles.categoryTag, { backgroundColor: catConfig.color + '15' }]}>
-                            <Text style={[styles.categoryTagText, { color: catConfig.color }]}>{item.category}</Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <Text style={styles.serviceDescription} numberOfLines={2}>
-                        {item.description || 'No description available'}
-                      </Text>
-
-                      <View style={styles.providerRow}>
-                        <PlaceholderAvatar size={28} initials={getInitials(item.provider_name)} />
-                        <Text style={styles.providerName}>{item.provider_name || 'Unknown Provider'}</Text>
-                      </View>
-
-                      <View style={styles.serviceFooter}>
-                        <View style={styles.creditsBadge}>
-                          <Text style={styles.creditsIcon}>💰</Text>
-                          <Text style={styles.creditsValue}>{item.credits_cost || 0}</Text>
-                          <Text style={styles.creditsLabel}>credits</Text>
-                        </View>
-                        <View style={styles.durationBadge}>
-                          <Text style={styles.durationIcon}>⏱️</Text>
-                          <Text style={styles.durationValue}>{item.duration_hours || (item.duration_minutes ? (item.duration_minutes / 60).toFixed(1) : 0)}h</Text>
-                        </View>
-                        <View style={styles.statusBadge}>
-                          <View style={styles.statusDot} />
-                          <Text style={styles.statusText}>Active</Text>
-                        </View>
-                      </View>
-                    </Card>
-                  );
-                }}
-              />
-            )}
+            <View style={styles.aiBannerText}>
+              <Text style={styles.aiBannerTitle}>AI Recommended</Text>
+              <Text style={styles.aiBannerSub}>Personalised matches based on your profile</Text>
+            </View>
           </View>
         )}
-      </View>
-    </ScrollView>
+
+        {/* Category chips */}
+        <FlatList
+          data={CATEGORIES}
+          keyExtractor={(item) => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.catList}
+          contentContainerStyle={{ paddingHorizontal: Spacing.base }}
+          renderItem={({ item }) => {
+            const cfg = CATEGORY_CONFIG[item];
+            const active = selectedCategory === item;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.catChip,
+                  active && { backgroundColor: cfg.color, borderColor: cfg.color },
+                ]}
+                onPress={() => setSelectedCategory(item)}
+                accessibilityLabel={`Filter by ${item}`}
+              >
+                <Ionicons
+                  name={cfg.icon}
+                  size={14}
+                  color={active ? AppColors.white : cfg.color}
+                />
+                <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+
+        {/* Section header */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Available Services</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{filteredServices.length}</Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        {loading ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color={AppColors.primary[600]} />
+            <Text style={styles.loadingText}>Loading services...</Text>
+          </View>
+        ) : filteredServices.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="search-outline" size={36} color={AppColors.neutral[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>No services found</Text>
+            <Text style={styles.emptySub}>Try adjusting your search or category filter</Text>
+          </View>
+        ) : (
+          <View style={styles.listWrap}>
+            {filteredServices.map((item) => {
+              const cfg = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.All;
+              return (
+                <TouchableOpacity
+                  key={String(item.id)}
+                  style={styles.serviceCard}
+                  onPress={() =>
+                    navigation.navigate('ServiceRequestOffer', { service: item, mode: 'view' })
+                  }
+                  activeOpacity={0.75}
+                  accessibilityLabel={`View ${item.title}`}
+                >
+                  {/* Card header */}
+                  <View style={styles.cardHeader}>
+                    <View style={[styles.catIconWrap, { backgroundColor: cfg.color + '18' }]}>
+                      <Ionicons name={cfg.icon} size={22} color={cfg.color} />
+                    </View>
+                    <View style={styles.cardHeaderInfo}>
+                      <Text style={styles.serviceTitle} numberOfLines={1}>{item.title}</Text>
+                      <View style={[styles.catTag, { backgroundColor: cfg.color + '18' }]}>
+                        <Text style={[styles.catTagText, { color: cfg.color }]}>{item.category}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={AppColors.neutral[300]} />
+                  </View>
+
+                  {/* Description */}
+                  <Text style={styles.serviceDesc} numberOfLines={2}>
+                    {item.description || 'No description available'}
+                  </Text>
+
+                  {/* Provider row */}
+                  <View style={styles.providerRow}>
+                    <PlaceholderAvatar size={26} initials={getInitials(item.provider_name)} name={item.provider_name} />
+                    <Text style={styles.providerName}>{item.provider_name || 'Unknown Provider'}</Text>
+                    {item.rating > 0 && (
+                      <View style={styles.ratingBadge}>
+                        <Ionicons name="star" size={11} color="#D97706" />
+                        <Text style={styles.ratingText}>{parseFloat(item.rating).toFixed(1)}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Footer */}
+                  <View style={styles.cardFooter}>
+                    <View style={styles.footerItem}>
+                      <Ionicons name="diamond" size={14} color={AppColors.primary[600]} />
+                      <Text style={styles.footerCredits}>{item.credits_cost || 0} credits</Text>
+                    </View>
+                    {item.duration_minutes ? (
+                      <View style={styles.footerItem}>
+                        <Ionicons name="time-outline" size={14} color={AppColors.neutral[400]} />
+                        <Text style={styles.footerMeta}>
+                          {item.duration_minutes < 60
+                            ? `${item.duration_minutes}m`
+                            : `${(item.duration_minutes / 60).toFixed(1)}h`}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.activeDot}>
+                      <View style={styles.dot} />
+                      <Text style={styles.activeText}>Active</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingTop: 16,
-  },
-  headerSection: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.secondary,
+  root: { flex: 1, backgroundColor: AppColors.neutral[50] },
+
+  // Search
+  searchWrap: {
+    backgroundColor: AppColors.white,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.neutral[100],
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: AppColors.neutral[50],
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 16,
+    borderColor: AppColors.neutral[200],
+    paddingHorizontal: Spacing.md,
+    height: 44,
   },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
+  searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: COLORS.text,
-    minHeight: 44,
+    fontSize: Typography.fontSize.sm,
+    color: AppColors.neutral[800],
   },
-  filterSection: {
-    marginBottom: 20,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.white,
-    marginRight: 8,
-  },
-  filterChipIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: COLORS.secondary,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.secondary,
-    textAlign: 'center',
-  },
-  servicesSection: {
-    marginBottom: 32,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  countBadge: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  countBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  serviceCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  categoryIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  categoryIconText: {
-    fontSize: 22,
-  },
-  serviceHeaderInfo: {
-    flex: 1,
-  },
-  serviceTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  categoryTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  categoryTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  serviceDescription: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    marginBottom: 12,
-    lineHeight: 19,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  providerName: {
-    fontSize: 13,
-    color: COLORS.text,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  serviceFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  creditsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  creditsIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  creditsValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.success,
-    marginRight: 2,
-  },
-  creditsLabel: {
-    fontSize: 12,
-    color: COLORS.secondary,
-  },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  durationIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  durationValue: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.success,
-    marginRight: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    color: COLORS.success,
-    fontWeight: '500',
-  },
+  clearBtn: { padding: 4 },
+
+  scroll: { paddingBottom: 32 },
+
+  // AI banner
   aiBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: AppColors.primary[50],
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.base,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
     borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    borderColor: AppColors.primary[200],
+    gap: 12,
   },
   aiBannerIcon: {
-    fontSize: 28,
-    marginRight: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: AppColors.primary[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  aiBannerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
+  aiBannerText: { flex: 1 },
+  aiBannerTitle: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.bold, color: AppColors.primary[700] },
+  aiBannerSub: { fontSize: Typography.fontSize.xs, color: AppColors.primary[500], marginTop: 2 },
+
+  // Categories
+  catList: { marginVertical: Spacing.base },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: AppColors.neutral[200],
+    backgroundColor: AppColors.white,
+    marginRight: 8,
+    ...Shadows.sm,
   },
-  aiBannerText: {
-    fontSize: 12,
-    color: COLORS.secondary,
-    marginTop: 2,
+  catChipText: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.semibold,
+    color: AppColors.neutral[600],
   },
+  catChipTextActive: { color: AppColors.white },
+
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: AppColors.neutral[800],
+  },
+  countBadge: {
+    marginLeft: 8,
+    backgroundColor: AppColors.primary[50],
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  countText: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: AppColors.primary[600],
+  },
+
+  // Loading / Empty
+  centerBox: { alignItems: 'center', paddingVertical: 60 },
+  loadingText: { marginTop: 12, fontSize: Typography.fontSize.sm, color: AppColors.neutral[500] },
+  emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: AppColors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: { fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold, color: AppColors.neutral[700], marginBottom: 6 },
+  emptySub: { fontSize: Typography.fontSize.sm, color: AppColors.neutral[400], textAlign: 'center', lineHeight: 20 },
+
+  // Service cards
+  listWrap: { paddingHorizontal: Spacing.base, gap: 12 },
+  serviceCard: {
+    backgroundColor: AppColors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.base,
+    ...Shadows.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: 12,
+  },
+  catIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardHeaderInfo: { flex: 1 },
+  serviceTitle: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: AppColors.neutral[900],
+    marginBottom: 4,
+  },
+  catTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  catTagText: { fontSize: 11, fontWeight: Typography.fontWeight.semibold },
+
+  serviceDesc: {
+    fontSize: Typography.fontSize.sm,
+    color: AppColors.neutral[500],
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+
+  providerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.neutral[100],
+  },
+  providerName: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    color: AppColors.neutral[700],
+    fontWeight: Typography.fontWeight.medium,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  ratingText: { fontSize: 12, fontWeight: Typography.fontWeight.bold, color: '#92400E' },
+
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  footerItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  footerCredits: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: AppColors.primary[600],
+  },
+  footerMeta: { fontSize: Typography.fontSize.xs, color: AppColors.neutral[500] },
+  activeDot: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#059669' },
+  activeText: { fontSize: Typography.fontSize.xs, color: '#059669', fontWeight: Typography.fontWeight.medium },
 });

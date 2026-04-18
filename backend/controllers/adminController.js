@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { sendEmail } = require('../services/emailService');
 
 // @desc    Get dashboard stats
 // @route   GET /api/admin/stats
@@ -49,7 +50,7 @@ exports.getAllUsers = async (req, res) => {
     const { page = 1, limit = 20, search, status } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = 'SELECT id, email, full_name, role, major, credits, reputation_score, total_reviews, account_status, created_at FROM users WHERE 1=1';
+    let query = 'SELECT id, email, contact_email, full_name, role, major, credits, reputation_score, total_reviews, account_status, created_at FROM users WHERE 1=1';
     const params = [];
 
     if (search) {
@@ -202,6 +203,38 @@ exports.getAllReports = async (req, res) => {
   } catch (error) {
     console.error('Get all reports error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Send email to a user
+// @route   POST /api/admin/send-email
+// @access  Private/Admin
+exports.sendEmailToUser = async (req, res) => {
+  try {
+    const { userId, subject, message } = req.body;
+    if (!userId || !subject || !message) {
+      return res.status(400).json({ message: 'userId, subject and message are required' });
+    }
+
+    const [rows] = await db.query(
+      'SELECT full_name, contact_email, email FROM users WHERE id = ?',
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    const user = rows[0];
+    const recipient = user.contact_email || user.email;
+
+    await sendEmail({
+      to: recipient,
+      subject: `[SkillSwap] ${subject}`,
+      text: `Hello ${user.full_name},\n\n${message}\n\nBest regards,\nSkillSwap Admin Team`,
+    });
+
+    res.json({ success: true, message: `Email sent to ${recipient}` });
+  } catch (error) {
+    console.error('Send email error:', error);
+    res.status(500).json({ message: error.message || 'Failed to send email' });
   }
 };
 

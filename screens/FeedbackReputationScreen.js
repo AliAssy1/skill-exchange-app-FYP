@@ -21,7 +21,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
 };
 
 export default function FeedbackReputationScreen({ route, navigation }) {
@@ -80,11 +80,9 @@ export default function FeedbackReputationScreen({ route, navigation }) {
       });
 
       if (result.success) {
-        showAlert('Review Submitted', 'Thank you for your feedback!');
-        setRating(0);
-        setReview('');
-        setSelectedTags([]);
-        fetchReviews();
+        showAlert('Thank you for your feedback!', 'Your review has been submitted.', [
+          { text: 'OK', onPress: () => navigation.navigate('MainApp') },
+        ]);
       } else {
         showAlert('Error', result.message);
       }

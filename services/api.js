@@ -1,20 +1,19 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { Platform } from "react-native";
 
 // ============================================================
 // ⚠️  IMPORTANT: SET YOUR COMPUTER'S IP ADDRESS HERE
-// ⚠️  Run "ipconfig" (Windows) or "ifconfig" (Mac/Linux) 
+// ⚠️  Run "ipconfig" (Windows) or "ifconfig" (Mac/Linux)
 // ⚠️  and find your IPv4 address (e.g. 192.168.x.x)
 // ============================================================
-const SERVER_IP = '172.20.10.3';
-const SERVER_PORT = '5000';
+const SERVER_IP = "172.20.10.2";
+const SERVER_PORT = "5000";
 // ============================================================
 
 // Auto-detect the right URL based on platform
 function getBaseUrl() {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return `http://localhost:${SERVER_PORT}/api`;
   }
   // Physical device (Expo Go) - use the computer's IP
@@ -27,7 +26,7 @@ const API_BASE_URL = getBaseUrl();
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 10000,
 });
@@ -35,7 +34,7 @@ const api = axios.create({
 // Request interceptor to add token to headers
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -43,7 +42,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor to handle errors
@@ -52,12 +51,13 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid - clear storage
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
 export { API_BASE_URL };
+

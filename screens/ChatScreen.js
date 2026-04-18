@@ -10,7 +10,6 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import Card from '../components/Card';
 import { useAuth } from '../contexts/AuthContext';
 import { showAlert } from '../utils/alertHelper';
 import chatService from '../services/chatService';
@@ -22,7 +21,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
   aiPrimary: '#3B82F6',
   aiBackground: '#EFF6FF',
 };
@@ -169,23 +168,23 @@ export default function ChatScreen({ route, navigation }) {
             return (
               <View key={msg.id || index} style={[styles.messageWrapper, isMine && styles.myMessageWrapper]}>
                 <View style={styles.messageContainer}>
-                  <Card style={[
-                    styles.messageBubble, 
+                  <View style={[
+                    styles.messageBubble,
                     isMine ? styles.myMessage : isAiMsg ? styles.aiMessage : styles.otherMessage
                   ]}>
                     <Text style={[
-                      styles.messageText, 
+                      styles.messageText,
                       isMine ? styles.myMessageText : isAiMsg ? styles.aiMessageText : null
                     ]}>
                       {msg.message}
                     </Text>
                     <Text style={[
-                      styles.timestamp, 
+                      styles.timestamp,
                       isMine ? styles.myTimestamp : isAiMsg ? styles.aiTimestamp : null
                     ]}>
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
-                  </Card>
+                  </View>
                   
                   {/* Browse Services Button for AI messages with results */}
                   {hasServices && (
@@ -265,7 +264,9 @@ const styles = StyleSheet.create({
     maxWidth: '75%',
   },
   messageBubble: {
-    padding: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
   },
   otherMessage: {
     backgroundColor: COLORS.white,

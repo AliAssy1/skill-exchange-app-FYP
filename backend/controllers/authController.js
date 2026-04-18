@@ -1,6 +1,81 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
 const { generateToken } = require('../middleware/authMiddleware');
+const { sendEmail } = require('../services/emailService');
+
+// @desc    Send email verification code
+// @route   POST /api/auth/send-verification
+// @access  Public
+exports.sendVerificationCode = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    // Exactly: k + 7 digits + @kingston.ac.uk
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^k\d{7}@kingston\.ac\.uk$/.test(cleanEmail)) {
+      return res.status(400).json({
+        message: 'Invalid email format. Use: k1234567@kingston.ac.uk'
+      });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS verification_codes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        code VARCHAR(6) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        verified TINYINT(1) DEFAULT 0,
+        UNIQUE KEY unique_email (email)
+      )
+    `);
+
+    // Fixed demo code — no random generation
+    const FIXED_CODE = '123456';
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await db.query(
+      `INSERT INTO verification_codes (email, code, expires_at, verified)
+       VALUES (?, ?, ?, 0)
+       ON DUPLICATE KEY UPDATE code = VALUES(code), expires_at = VALUES(expires_at), verified = 0`,
+      [cleanEmail, FIXED_CODE, expiresAt]
+    );
+
+    res.json({ success: true, message: 'Verification code sent to your email' });
+  } catch (error) {
+    console.error('Send verification error:', error);
+    res.status(500).json({ message: 'Failed to send verification code. Please try again.' });
+  }
+};
+
+// @desc    Verify email code
+// @route   POST /api/auth/verify-code
+// @access  Public
+exports.verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required' });
+    }
+    const cleanEmail = email.trim().toUpperCase();
+
+    const [rows] = await db.query(
+      `SELECT id FROM verification_codes
+       WHERE UPPER(email) = ? AND code = ? AND expires_at > NOW() AND verified = 0`,
+      [cleanEmail, code.trim()]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired code. Please try again.' });
+    }
+
+    await db.query('UPDATE verification_codes SET verified = 1 WHERE UPPER(email) = ?', [cleanEmail]);
+    res.json({ success: true, message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Verify code error:', error);
+    res.status(500).json({ message: 'Server error during verification' });
+  }
+};
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -25,6 +100,15 @@ exports.register = async (req, res) => {
     // Backend password length enforcement
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Check that the Kingston email was verified
+    const [verified] = await db.query(
+      'SELECT id FROM verification_codes WHERE email = ? AND verified = 1',
+      [normalizedEmail]
+    );
+    if (verified.length === 0) {
+      return res.status(400).json({ message: 'Email not verified. Please verify your Kingston email first.' });
     }
 
     // Check if user exists
@@ -90,10 +174,30 @@ exports.login = async (req, res) => {
     const normalizedEmail = email.trim();
 
     // Get user (case-insensitive lookup)
-    const [users] = await db.query(
+    let [users] = await db.query(
       'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
       [normalizedEmail]
     );
+
+    // ── Demo student accounts — presentation only ──────────────────────
+    if (users.length === 0) {
+      const emailKey = normalizedEmail.toLowerCase();
+      const DEMO_STUDENTS = {
+        'k1234567@kingston.ac.uk': { password: 'Password123', full_name: 'Demo Student One' },
+        'k7654321@kingston.ac.uk': { password: 'Password123', full_name: 'Demo Student Two' },
+      };
+      const demo = DEMO_STUDENTS[emailKey];
+      if (demo && password === demo.password) {
+        const hashed = await bcrypt.hash(password, 10);
+        await db.query(
+          `INSERT IGNORE INTO users (email, password, full_name, role, credits, reputation_score)
+           VALUES (?, ?, ?, 'student', 100, 0.00)`,
+          [emailKey, hashed, demo.full_name]
+        );
+        [users] = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [emailKey]);
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────
 
     if (users.length === 0) {
       return res.status(401).json({ message: 'Invalid credentials' });

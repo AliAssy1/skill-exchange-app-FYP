@@ -12,6 +12,25 @@ class AuthService {
    * @param {Object} userData - User registration data
    * @returns {Promise} Response with user data and token
    */
+  async sendVerificationCode(email) {
+    try {
+      const response = await api.post('/auth/send-verification', { email });
+      // response.data: { success, message, demo? }
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async verifyCode(email, code) {
+    try {
+      const response = await api.post('/auth/verify-code', { email, code });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async register(userData) {
     try {
       const response = await api.post('/auth/register', userData);

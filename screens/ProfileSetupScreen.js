@@ -5,13 +5,16 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
 import PlaceholderAvatar from '../components/PlaceholderAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import userService from '../services/userService';
 import { showAlert } from '../utils/alertHelper';
+import { saveProfilePhoto, loadProfilePhoto } from '../utils/profilePhoto';
 
 const COLORS = {
   white: '#FFFFFF',
@@ -19,7 +22,7 @@ const COLORS = {
   text: '#1F2937',
   secondary: '#6B7280',
   border: '#D1D5DB',
-  primary: '#4B5563',
+  primary: '#1D4ED8',
 };
 
 export default function ProfileSetupScreen({ navigation }) {
@@ -30,7 +33,19 @@ export default function ProfileSetupScreen({ navigation }) {
   const [major, setMajor] = useState('');
   const [yearOfStudy, setYearOfStudy] = useState('');
   const [loading, setLoading] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(null);
   const { user, updateUser } = useAuth();
+
+  // Load previously saved photo on mount
+  React.useEffect(() => {
+    if (user?.id) {
+      loadProfilePhoto(user.id).then(uri => { if (uri) setProfilePhoto(uri); });
+      // Pre-fill existing profile data
+      if (user.bio) setBio(user.bio);
+      if (user.major) setMajor(user.major);
+      if (user.year_of_study) setYearOfStudy(user.year_of_study);
+    }
+  }, [user?.id]);
 
   const handleNext = async () => {
     if (step < 3) {
@@ -100,6 +115,25 @@ export default function ProfileSetupScreen({ navigation }) {
     }
   };
 
+  const handleUploadPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Permission Required', 'Please allow access to your photo library to upload a profile photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setProfilePhoto(uri);
+      await saveProfilePhoto(user?.id, uri);
+    }
+  };
+
   const handleSkip = () => {
     if (step < 3) {
       setStep(step + 1);
@@ -121,13 +155,17 @@ export default function ProfileSetupScreen({ navigation }) {
             <Text style={styles.subtitle}>Add a profile photo to help other students recognize you</Text>
             
             <View style={styles.avatarContainer}>
-              <PlaceholderAvatar size={120} initials="U" />
+              {profilePhoto ? (
+                <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+              ) : (
+                <PlaceholderAvatar size={120} initials="U" />
+              )}
             </View>
 
             <Button
-              title="Upload Photo"
+              title={profilePhoto ? 'Change Photo' : 'Upload Photo'}
               variant="secondary"
-              onPress={() => {}}
+              onPress={handleUploadPhoto}
               accessibilityLabel="Upload Profile Photo"
             />
 
@@ -251,6 +289,11 @@ const styles = StyleSheet.create({
   avatarContainer: {
     alignItems: 'center',
     marginBottom: 24,
+  },
+  profileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   buttonContainer: {
     flexDirection: 'row',

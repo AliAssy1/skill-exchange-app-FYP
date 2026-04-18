@@ -12,7 +12,7 @@ exports.getServices = async (req, res) => {
     const offset = (safePage - 1) * limit;
 
     let query = `
-      SELECT s.*, u.full_name, u.avatar_url, u.reputation_score
+      SELECT s.*, u.full_name as provider_name, u.avatar_url as provider_avatar, u.reputation_score as rating
       FROM services s
       JOIN users u ON s.user_id = u.id
       WHERE s.status = 'active'
@@ -67,7 +67,7 @@ exports.getServices = async (req, res) => {
 exports.getService = async (req, res) => {
   try {
     const [services] = await db.query(
-      `SELECT s.*, u.full_name, u.avatar_url, u.reputation_score, u.email
+      `SELECT s.*, u.full_name as provider_name, u.avatar_url as provider_avatar, u.reputation_score as rating, u.email as provider_email
        FROM services s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
