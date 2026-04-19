@@ -11,7 +11,7 @@ const SERVER_IP = "172.20.10.2";
 const SERVER_PORT = "5000";
 
 // 🚀 Set this to your deployed backend URL (e.g., https://your-app.up.railway.app)
-const PRODUCTION_API_URL = "";
+const PRODUCTION_API_URL = "https://backend-production-4ef1.up.railway.app";
 // ============================================================
 
 // Auto-detect the right URL based on platform and environment
