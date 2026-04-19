@@ -203,7 +203,8 @@ const initDatabase = async () => {
 
   } catch (error) {
     console.error('❌ Error initializing database:', error.message);
-    process.exit(1);
+    if (require.main === module) process.exit(1);
+    throw error;
   } finally {
     if (connection) {
       await connection.end();
@@ -211,5 +212,9 @@ const initDatabase = async () => {
   }
 };
 
-// Run initialization
-initDatabase();
+// Run initialization if called directly, or export for use in server.js
+if (require.main === module) {
+  initDatabase();
+}
+
+module.exports = { initDatabase };

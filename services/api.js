@@ -3,16 +3,23 @@ import axios from "axios";
 import { Platform } from "react-native";
 
 // ============================================================
-// ⚠️  IMPORTANT: SET YOUR COMPUTER'S IP ADDRESS HERE
-// ⚠️  Run "ipconfig" (Windows) or "ifconfig" (Mac/Linux)
-// ⚠️  and find your IPv4 address (e.g. 192.168.x.x)
+// ⚠️  CONFIGURATION
+// ⚠️  For local development: set SERVER_IP to your computer's IP
+// ⚠️  For production: set PRODUCTION_API_URL to your deployed backend
 // ============================================================
 const SERVER_IP = "172.20.10.2";
 const SERVER_PORT = "5000";
+
+// 🚀 Set this to your deployed backend URL (e.g., https://your-app.up.railway.app)
+const PRODUCTION_API_URL = "";
 // ============================================================
 
-// Auto-detect the right URL based on platform
+// Auto-detect the right URL based on platform and environment
 function getBaseUrl() {
+  // If production URL is set, always use it
+  if (PRODUCTION_API_URL) {
+    return `${PRODUCTION_API_URL}/api`;
+  }
   if (Platform.OS === "web") {
     return `http://localhost:${SERVER_PORT}/api`;
   }
