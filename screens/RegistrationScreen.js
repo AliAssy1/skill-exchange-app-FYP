@@ -17,6 +17,7 @@ import { AppColors, Spacing, Typography, BorderRadius, Shadows } from '../consta
 import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/authService';
 import { showAlert } from '../utils/alertHelper';
+import * as Notifications from 'expo-notifications';
 
 // Matches k[one-or-more-digits]@kingston.ac.uk (case-insensitive)
 const KINGSTON_REGEX = /^k\d+@kingston\.ac\.uk$/i;
@@ -143,6 +144,7 @@ export default function RegistrationScreen({ navigation }) {
         major: 'Not specified',
         year_of_study: 'Not specified',
       });
+      await Notifications.requestPermissionsAsync().catch(() => {});
       showAlert(
         'Account Created!',
         "Welcome to SkillSwap! Let's set up your profile.",

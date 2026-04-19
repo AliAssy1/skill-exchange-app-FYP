@@ -42,10 +42,12 @@ app.use(express.urlencoded({ extended: true }));
 // Static files
 app.use('/uploads', express.static('uploads'));
 
-// Test database connection
+// Test database connection and run migrations
 db.getConnection()
-  .then(connection => {
+  .then(async connection => {
     console.log('✅ MySQL Database Connected');
+    await connection.query('ALTER TABLE users ADD COLUMN latitude DECIMAL(10,8) DEFAULT NULL').catch(() => {});
+    await connection.query('ALTER TABLE users ADD COLUMN longitude DECIMAL(11,8) DEFAULT NULL').catch(() => {});
     connection.release();
   })
   .catch(err => {

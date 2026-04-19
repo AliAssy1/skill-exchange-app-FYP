@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PlaceholderAvatar from '../components/PlaceholderAvatar';
@@ -35,7 +37,20 @@ export default function BrowseServicesScreen({ navigation, route }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const aiServices = route?.params?.aiServices || null;
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+      e => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   useEffect(() => {
     if (aiServices) {
@@ -73,7 +88,7 @@ export default function BrowseServicesScreen({ navigation, route }) {
     (name || '??').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingBottom: keyboardHeight }]}>
       {/* Search bar */}
       <View style={styles.searchWrap}>
         <View style={styles.searchBox}>

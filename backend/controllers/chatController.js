@@ -173,7 +173,7 @@ exports.markAsRead = async (req, res) => {
 exports.getUnreadCount = async (req, res) => {
   try {
     const [result] = await db.query(
-      'SELECT COUNT(*) as count FROM messages WHERE receiver_id = ? AND is_read = FALSE',
+      'SELECT COUNT(*) as count FROM messages WHERE receiver_id = ? AND is_read = FALSE AND sender_id != 1',
       [req.user.id]
     );
 

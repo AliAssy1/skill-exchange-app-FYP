@@ -3,6 +3,33 @@ const db = require('../config/database');
 const { generateToken } = require('../middleware/authMiddleware');
 const { sendEmail } = require('../services/emailService');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EMAIL TEMPLATE
+// ─────────────────────────────────────────────────────────────────────────────
+function buildVerificationEmail(code) {
+  return `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#F5F3FF;font-family:Arial,sans-serif;">
+  <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:16px;padding:36px 32px;box-shadow:0 4px 16px rgba(109,40,217,0.10);">
+    <div style="text-align:center;margin-bottom:24px;">
+      <span style="font-size:28px;font-weight:800;color:#6D28D9;">SkillSwap</span>
+      <p style="margin:4px 0 0;color:#A78BFA;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Kingston University</p>
+    </div>
+    <h2 style="color:#1F2937;font-size:20px;margin:0 0 8px;">Verify your email address</h2>
+    <p style="color:#6B7280;font-size:14px;margin:0 0 24px;">Use the code below to complete your SkillSwap registration. It expires in <strong>10 minutes</strong>.</p>
+    <div style="text-align:center;margin:28px 0;">
+      <div style="display:inline-block;background:#F5F3FF;border:2px solid #DDD6FE;border-radius:12px;padding:18px 36px;">
+        <span style="font-size:40px;font-weight:800;letter-spacing:10px;color:#6D28D9;">${code}</span>
+      </div>
+    </div>
+    <p style="color:#9CA3AF;font-size:13px;text-align:center;margin:0;">If you didn't request this, you can safely ignore this email.</p>
+    <hr style="border:none;border-top:1px solid #E5E7EB;margin:28px 0 16px;">
+    <p style="color:#D1D5DB;font-size:11px;text-align:center;margin:0;">SkillSwap Platform &bull; Kingston University Student Exchange</p>
+  </div>
+</body>
+</html>`;
+}
+
 // @desc    Send email verification code
 // @route   POST /api/auth/send-verification
 // @access  Public
@@ -30,16 +57,48 @@ exports.sendVerificationCode = async (req, res) => {
       )
     `);
 
-    // Fixed demo code — no random generation
-    const FIXED_CODE = '123456';
+    // Generate a secure random 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await db.query(
       `INSERT INTO verification_codes (email, code, expires_at, verified)
        VALUES (?, ?, ?, 0)
        ON DUPLICATE KEY UPDATE code = VALUES(code), expires_at = VALUES(expires_at), verified = 0`,
-      [cleanEmail, FIXED_CODE, expiresAt]
+      [cleanEmail, code, expiresAt]
     );
+
+    // Send the code to the student's Kingston email
+    const emailConfigured =
+      process.env.EMAIL_USER &&
+      process.env.EMAIL_PASS &&
+      !process.env.EMAIL_USER.includes('your-gmail') &&
+      !process.env.EMAIL_PASS.includes('your16char');
+
+    if (emailConfigured) {
+      try {
+        await sendEmail({
+          to: cleanEmail,
+          subject: 'SkillSwap — Your verification code',
+          text: `Your SkillSwap verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+          html: buildVerificationEmail(code),
+        });
+      } catch (emailErr) {
+        console.error('Email send failed:', emailErr.message);
+        await db.query('DELETE FROM verification_codes WHERE email = ?', [cleanEmail]);
+        return res.status(503).json({
+          message: 'Failed to send the verification email. Please check EMAIL_USER and EMAIL_PASS in the backend .env file.',
+        });
+      }
+    } else {
+      // Dev / demo mode: no Gmail credentials configured — print code to terminal
+      console.log('\n========================================');
+      console.log(`  VERIFICATION CODE (email not configured)`);
+      console.log(`  Email : ${cleanEmail}`);
+      console.log(`  Code  : ${code}`);
+      console.log(`  Valid for 10 minutes`);
+      console.log('========================================\n');
+    }
 
     res.json({ success: true, message: 'Verification code sent to your email' });
   } catch (error) {

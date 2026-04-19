@@ -1,423 +1,410 @@
+const Anthropic = require('@anthropic-ai/sdk');
 const db = require('../config/database');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CATEGORY MAP
-// Maps every word a user might say → a canonical service category.
-// Add new rows here as the platform grows — no other code needs to change.
-// ─────────────────────────────────────────────────────────────────────────────
-const CATEGORY_MAP = {
-  tutoring: [
-    'teacher', 'tutor', 'tutoring', 'study', 'studying',
-    'math', 'maths', 'mathematics', 'calculus', 'algebra', 'geometry', 'statistics',
-    'physics', 'chemistry', 'biology', 'science',
-    'exam', 'test', 'homework', 'assignment', 'revision', 'lecture',
-    'english', 'literature', 'essay', 'academic', 'university', 'degree',
-  ],
-  music: [
-    'guitar', 'piano', 'keyboard', 'violin', 'viola', 'cello',
-    'drums', 'drum', 'bass', 'singing', 'singer', 'vocal', 'voice',
-    'music', 'musician', 'instrument', 'song', 'band', 'composition',
-  ],
-  food: [
-    'food', 'hungry', 'hunger', 'eat', 'eating', 'starving', 'famished',
-    'cooking', 'cook', 'chef', 'meal', 'recipe', 'baking', 'bake',
-    'cuisine', 'nutrition', 'diet',
-  ],
-  programming: [
-    'programming', 'coding', 'code', 'coder', 'developer', 'software',
-    'python', 'javascript', 'java', 'typescript', 'cpp', 'c++',
-    'html', 'css', 'react', 'node', 'database', 'sql', 'api',
-    'web', 'website', 'app', 'mobile', 'backend', 'frontend',
-    'computer', 'tech', 'technology',
-  ],
-  design: [
-    'design', 'designer', 'graphic', 'logo', 'poster', 'banner', 'branding',
-    'photoshop', 'illustrator', 'figma', 'sketch', 'canva',
-    'illustration', 'drawing', 'art', 'artist', 'visual', 'ui', 'ux',
-  ],
-  language: [
-    'language', 'languages', 'translate', 'translation', 'interpreter',
-    'spanish', 'french', 'arabic', 'german', 'chinese', 'japanese',
-    'italian', 'portuguese', 'russian', 'korean', 'hindi', 'urdu',
-    'accent', 'speak', 'speaking', 'conversation', 'fluent',
-  ],
-  fitness: [
-    'fitness', 'gym', 'workout', 'exercise', 'training', 'trainer',
-    'yoga', 'pilates', 'sport', 'sports', 'running', 'jogging',
-    'weight', 'muscle', 'strength', 'cardio', 'health', 'wellbeing',
-    'martial', 'boxing', 'swimming',
-  ],
-  construction: [
-    'construction', 'builder', 'building', 'build',
-    'repair', 'fix', 'fixing', 'maintenance',
-    'plumber', 'plumbing', 'electrician', 'electric', 'wiring',
-    'carpenter', 'carpentry', 'painting', 'decorator',
-    'handyman', 'renovation', 'install', 'installation',
-  ],
-  writing: [
-    'writing', 'write', 'writer', 'copywriting', 'copywriter',
-    'grammar', 'proofread', 'proofreading', 'editing', 'editor',
-    'blog', 'content', 'report', 'cv', 'resume',
-  ],
-  business: [
-    'business', 'accounting', 'accountant', 'finance', 'financial',
-    'economics', 'marketing', 'management', 'entrepreneur',
-    'startup', 'investment', 'tax', 'bookkeeping',
-  ],
-  photography: [
-    'photo', 'photos', 'photography', 'photographer', 'camera',
-    'video', 'videography', 'filming', 'film', 'editing', 'lightroom',
-    'portrait', 'wedding', 'event',
-  ],
-};
-
-// DB search terms used per category — broader than individual keywords so the
-// LIKE query can match service titles / descriptions / categories in the DB.
-const CATEGORY_SEARCH_TERMS = {
-  tutoring:     ['tutor', 'teaching', 'academic', 'study', 'homework'],
-  music:        ['music', 'guitar', 'piano', 'violin', 'singing', 'instrument'],
-  food:         ['cooking', 'food', 'baking', 'meal', 'chef', 'nutrition'],
-  programming:  ['programming', 'coding', 'development', 'software', 'web'],
-  design:       ['design', 'graphic', 'art', 'illustration', 'ui', 'ux'],
-  language:     ['language', 'spanish', 'french', 'arabic', 'translation'],
-  fitness:      ['fitness', 'gym', 'yoga', 'exercise', 'training', 'sport'],
-  construction: ['construction', 'repair', 'building', 'handyman', 'plumbing'],
-  writing:      ['writing', 'essay', 'grammar', 'english', 'content'],
-  business:     ['business', 'accounting', 'finance', 'marketing'],
-  photography:  ['photography', 'video', 'photo', 'editing'],
-};
-
-// Human-readable label shown in responses
-const CATEGORY_LABELS = {
-  tutoring:     'tutoring / academic help',
-  music:        'music lessons',
-  food:         'cooking / food',
-  programming:  'programming / tech',
-  design:       'design / art',
-  language:     'language lessons',
-  fitness:      'fitness / sport',
-  construction: 'construction / repair',
-  writing:      'writing / editing',
-  business:     'business / finance',
-  photography:  'photography / video',
-};
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FILLER PHRASES  — stripped from messages before category mapping
+// SYSTEM PROMPT
 // ─────────────────────────────────────────────────────────────────────────────
-const FILLER_PHRASES = [
-  'is there any', 'is there a', 'is there an', 'is there',
-  'are there any', 'are there', 'anyone in', 'anyone who',
-  'do you have any', 'do you have a', 'do you have',
-  'can i find', 'can you find me', 'can you find',
-  "i'm looking for", 'i am looking for', 'looking for',
-  'i need a', 'i need an', 'i need',
-  'i want a', 'i want an', 'i want',
-  'help me find', 'help me with', 'help me',
-  'show me', 'get me', 'find me', 'find a', 'find an',
-  'i am', "i'm", 'i have', "i've",
-  'searching for', 'searching',
-  'any good', 'any', 'some', 'please',
-  'here', 'around', 'available', 'near me', 'in my area',
-  'can you', 'could you', 'would you', 'do you', 'does anyone',
+const SYSTEM_PROMPT = `You are an advanced AI assistant embedded inside a Student Skill Exchange mobile app called SkillSwap.
+
+Your job is to act as a highly intelligent, helpful, and reliable assistant that improves user experience, guides users, and understands the app deeply.
+
+## APP CONTEXT
+This app allows students to:
+- Post services they can offer (e.g., tutoring, coding help, design, CV writing)
+- Browse and request services from other students
+- Chat with other users
+- Use a credit system to pay for services
+- Earn credits by helping others
+- Leave reviews and build reputation
+
+Credits are a time/effort-based internal currency, not real money.
+
+## YOUR MAIN GOALS
+You must always:
+1. Give accurate, helpful, and simple explanations
+2. Respond in a friendly, natural, human tone
+3. Help users take action inside the app (not just talk)
+4. Guide users toward using features (posting services, finding help, using credits)
+5. Be concise but informative
+6. Never confuse or overwhelm the user
+
+## SMART BEHAVIOR RULES
+- If the user asks how something works, explain clearly step-by-step
+- If the user needs help, suggest specific actions inside the app
+- If the user asks vague questions, ask clarifying questions before answering
+- If the user asks about services, use the search_services tool to find real results from the app
+- If the user asks about credits, explain them simply as a time-based exchange system
+- Always try to move the conversation toward solving the user's problem
+- When you find services using the tool, present them in a clear, readable format
+
+## IMPORTANT LIMITS
+- Do NOT invent real users, services, or transactions
+- If you don't know something specific in the app, say so and guide the user
+- Do not give unsafe, illegal, or harmful advice
+- Do not be overly robotic or repetitive
+
+## TONE
+- Friendly, helpful, and natural
+- Like a smart student assistant, not a corporate bot
+- Avoid long paragraphs unless necessary
+- Be encouraging but not fake or overly emotional
+
+## RESPONSE STYLE
+Bad: "I am an AI and cannot assist with that."
+Good: "I'm not seeing that option directly, but you can try going to your Profile → Edit → then update your bio. Want me to guide you step-by-step?"
+
+## EXTRA INTELLIGENCE RULE
+Whenever possible:
+- Suggest the next best action inside the app
+- Help users complete tasks, not just answer questions
+- Think like a product assistant, not a general chatbot
+
+When presenting services found via search, format each one clearly with name, provider, cost, and a brief description. Always end with encouragement to browse or request.
+
+Your purpose is to make the app feel intelligent, helpful, and easy to use.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOOL DEFINITION
+// ─────────────────────────────────────────────────────────────────────────────
+const tools = [
+  {
+    name: 'search_services',
+    description: 'Search the SkillSwap database for available student services. Use this whenever the user asks about finding, browsing, or looking for any kind of service or help.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        terms: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Search keywords to look for in service titles, descriptions, and categories. Include synonyms and related terms for better results.',
+        },
+      },
+      required: ['terms'],
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 1 — classifyIntent(message)
-// Returns: "greeting" | "conversation" | "service_request" | "unknown"
+// INTENT DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GREETING_WORDS   = ['hi', 'hey', 'hello', 'howdy', 'hiya', 'yo', 'sup', 'heya', 'greetings'];
-const GREETING_PHRASES = ['good morning', 'good afternoon', 'good evening', 'good night'];
+const INTENT_RULES = {
+  FIND_SERVICE: [
+    { re: /\b(need|want|find|get|looking for|search|hire|where can i)\b/, w: 2 },
+    { re: /\b(tutor|teacher|coach|mentor|instructor)\b/, w: 3 },
+    { re: /\b(help with|help me|teach me|learn|study|practice|someone (who|that) can)\b/, w: 2 },
+    { re: /\b(math|maths|physics|chemistry|biology|coding|programming|python|javascript|java|html|css|react|spanish|french|arabic|german|chinese|japanese|design|essay|cv|grammar|writing|accounting|business|fitness|music|guitar|piano|singing)\b/, w: 2 },
+  ],
+  OFFER_SERVICE: [
+    { re: /\b(i can|i know|i teach|i offer|i provide|i'm good at|i am good at)\b/, w: 4 },
+    { re: /\b(want to|looking to|would like to) (teach|help|offer|share|provide|start)\b/, w: 4 },
+    { re: /\b(post|create|list|add|publish) (a |my |)(service|skill)\b/, w: 3 },
+    { re: /\b(earn|make|get) (credits|tokens)\b/, w: 2 },
+    { re: /\bshare my (skills?|knowledge|expertise)\b/, w: 3 },
+  ],
+  GENERAL_BROWSE: [
+    { re: /\b(browse|explore|see all|view all|show me everything|show me services|show me what)\b/, w: 4 },
+    { re: /\bwhat('s| is) (available|here|on offer|on there|on skillswap)\b/, w: 3 },
+    { re: /\bwhat (services|categories|subjects|skills) (are|do you|can i)\b/, w: 2 },
+    { re: /\ball services\b/, w: 3 },
+  ],
+  HELP: [
+    { re: /^(help|idk|hmm|hm|huh|ok|okay|sure|hi|hey|hello|yo|sup|what|huh)[\s!?.]*$/i, w: 5 },
+    { re: /\b(help|guide|explain|how do i|what is|how does|confused|not sure|don't know|no idea|stuck)\b/, w: 2 },
+    { re: /^\s*.{1,6}\s*$/, w: 1 },
+  ],
+  ACTIVITY: [
+    { re: /\bmy (requests?|messages?|services?|notifications?|history|credits?|balance|activity|incoming|sent)\b/, w: 5 },
+    { re: /\b(check|see|view|show) (my |)(requests?|messages?|activity|sent|incoming|pending)\b/, w: 4 },
+    { re: /\b(how many|status|pending|unread)\b/, w: 2 },
+  ],
+};
 
-// Patterns that indicate the user is chatting, NOT searching for a service
-const CONVERSATION_PATTERNS = [
-  /^how are you/,
-  /^how r u/,
-  /^who are you/,
-  /^what are you/,
-  /^what can you do/,
-  /^tell me about yourself/,
-  /^(thank|thanks|thx|cheers)/,
-  /^(ok|okay|cool|great|nice|awesome|sounds good|got it|understood)(\s|$)/,
-  /^(bye|goodbye|see you|cya|take care)(\s|$)/,
-  /^(yes|no|yeah|nope|nah|yep|sure)$/,
-  /^(lol|haha|hehe|wow|oh|ah|hmm|interesting)(\s|$)/,
-  /^i am (tired|bored|happy|sad|excited|fine|okay|good|great|bad|sick|busy|back)/,
-  /^i'm (tired|bored|happy|sad|excited|fine|okay|good|great|bad|sick|busy|back)/,
-  /^what('s| is) (this|that|it|up|new|happening)/,
-  /^(morning|afternoon|evening)(\s|$)/,
-];
-
-// Explicit phrases that signal the user wants a service
-const SEARCH_TRIGGER_PHRASES = [
-  'find', 'search', 'looking for', 'need a', 'need an', 'need some',
-  'want a', 'want an', 'is there', 'are there', 'anyone in', 'do you have',
-  'show me', 'recommend', 'suggest', 'any service', 'help with', 'help me',
-];
-
-function classifyIntent(message) {
+function detectIntent(message) {
   const lower = message.toLowerCase().trim();
-  const words = lower.split(/\s+/);
+  const scores = { FIND_SERVICE: 0, OFFER_SERVICE: 0, GENERAL_BROWSE: 0, HELP: 0, ACTIVITY: 0 };
 
-  // ── Greeting ────────────────────────────────────────────────────────────
-  if (GREETING_WORDS.includes(words[0]) && words.length <= 4) return 'greeting';
-  if (GREETING_PHRASES.some(p => lower.startsWith(p)))         return 'greeting';
-
-  // ── Pure conversation ────────────────────────────────────────────────────
-  if (CONVERSATION_PATTERNS.some(p => p.test(lower))) return 'conversation';
-
-  // ── Explicit search trigger ──────────────────────────────────────────────
-  if (SEARCH_TRIGGER_PHRASES.some(t => lower.includes(t))) return 'service_request';
-
-  // ── Category keyword present → user is asking about a service ───────────
-  if (mapToCategory(lower) !== null) return 'service_request';
-
-  // ── Short or vague message with no signal ───────────────────────────────
-  if (words.length <= 2) return 'unknown';
-
-  // ── Multi-word message we couldn't classify — treat as possible search ───
-  return 'service_request';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 2 — mapToCategory(message)
-// Strips fillers, then checks every remaining word against CATEGORY_MAP.
-// Returns the first matching category string, or null if none found.
-// ─────────────────────────────────────────────────────────────────────────────
-function mapToCategory(message) {
-  // Strip filler phrases (longest first to avoid partial removal)
-  const sortedFillers = [...FILLER_PHRASES].sort((a, b) => b.length - a.length);
-  let cleaned = message.toLowerCase().trim();
-  for (const filler of sortedFillers) {
-    cleaned = cleaned.replace(new RegExp(`\\b${filler}\\b`, 'g'), ' ');
-  }
-  cleaned = cleaned.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-  const words = cleaned.split(/\s+/).filter(w => w.length > 1);
-
-  // Check each word against every category's keyword list
-  for (const word of words) {
-    for (const [category, keywords] of Object.entries(CATEGORY_MAP)) {
-      if (keywords.includes(word)) return category;
+  for (const [intent, rules] of Object.entries(INTENT_RULES)) {
+    for (const { re, w } of rules) {
+      if (re.test(lower)) scores[intent] += w;
     }
   }
 
-  // Also try partial matching for compound words (e.g. "guitarist" contains "guitar")
-  for (const word of words) {
-    for (const [category, keywords] of Object.entries(CATEGORY_MAP)) {
-      if (keywords.some(kw => word.includes(kw) || kw.includes(word))) return category;
-    }
-  }
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [topIntent, topScore] = sorted[0];
+  const confidence = parseFloat(Math.min(topScore / 6, 1.0).toFixed(2));
 
-  return null;
+  return topScore >= 2
+    ? { intent: topIntent, confidence }
+    : { intent: 'UNKNOWN', confidence: 0 };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 3 — searchByCategory(category, userId)
-// Uses CATEGORY_SEARCH_TERMS to run a broad DB query, then falls back
-// to related categories if the primary one returns nothing.
+// SMART RESPONSE BANK
+// Every entry has a text (or textFn) + suggestions array.
+// Suggestions must always be short, action-oriented, tappable phrases.
 // ─────────────────────────────────────────────────────────────────────────────
-async function searchByCategory(category, userId) {
-  const terms = CATEGORY_SEARCH_TERMS[category] || [category];
-  const services = await dbQuery(terms, userId);
 
-  if (services.length > 0) {
-    const label = CATEGORY_LABELS[category] || category;
-    const response =
-      `🎯 I found ${services.length} service${services.length > 1 ? 's' : ''} for ${label}:\n\n` +
-      formatResults(services) +
-      '💡 Tap "View Services in Browse" to see full details!';
-    return { response, results: services };
+const SMART_RESPONSES = {
+  GREETING: {
+    text: "Hey! I'm your SkillSwap assistant — I can help you find services, offer your skills, or answer any questions about the app. What would you like to do?",
+    suggestions: ['Find a tutor', 'Browse all services', 'Offer my skills', 'How do credits work?', 'Check my requests'],
+  },
+  FIND_SERVICE: {
+    textFound:    (n) => `Found ${n} service${n > 1 ? 's' : ''} that match! Tap below to browse them.`,
+    textNotFound: "I didn't find exact matches right now — but here are some ways I can help:",
+    suggestionsFound:    ['Search for something else', 'Browse all services', 'Offer my own skills', 'Check my requests'],
+    suggestionsNotFound: ['Browse all services', 'Try a different keyword', 'Offer my own skills', 'Ask me anything else'],
+  },
+  OFFER_SERVICE: {
+    text: "Great — sharing your skills is the best way to earn credits on SkillSwap! Here's how to get started:",
+    suggestions: ['How do I post a service?', 'What subjects are in demand?', 'How do credits work?', 'Browse services first', 'See my existing services'],
+  },
+  GENERAL_BROWSE: {
+    text: "Sure! Here's a snapshot of what's on SkillSwap — what catches your interest?",
+    suggestions: ['Tutoring & academics', 'Programming & tech', 'Languages', 'Design & creative', 'Fitness & health', 'Business & finance'],
+  },
+  ACTIVITY: {
+    text: "Here's a quick look at your activity — what would you like to check?",
+    suggestions: ['Incoming requests', 'Sent requests', 'My messages', 'Service history', 'My credits balance'],
+  },
+  HELP: {
+    text: "Happy to help! Here are the most popular things people do on SkillSwap:",
+    suggestions: ['Find a tutor or helper', 'Browse all services', 'Offer my own skills', 'Check my requests', 'How do credits work?'],
+  },
+  UNKNOWN: {
+    text: "Not quite sure what you mean — but here are some things I can help with on SkillSwap:",
+    suggestions: ['Find a tutor or helper', 'Browse all services', 'Offer my own skills', 'Check my requests', 'How do credits work?'],
+  },
+};
+
+// Suggestions appended to every Claude API response, keyed by context
+const CONTEXT_SUGGESTIONS = {
+  FIND_SERVICE_results:   ['Search for something else', 'Browse all services', 'Offer my own skills', 'Check my requests'],
+  FIND_SERVICE_noresults: ['Browse all services', 'Try a different keyword', 'Offer my own skills', 'Ask me anything else'],
+  OFFER_SERVICE:  ['How do I post a service?', 'Browse services first', 'How do credits work?', 'See my existing services'],
+  GENERAL_BROWSE: ['Find a specific tutor', 'Browse all services', 'Offer my skills', 'Check my requests'],
+  ACTIVITY:       ['Incoming requests', 'Sent requests', 'My messages', 'Service history'],
+  HELP:           ['Find a tutor or helper', 'Browse all services', 'Offer my own skills', 'How do credits work?'],
+  UNKNOWN:        ['Find a tutor or helper', 'Browse all services', 'Offer my own skills', 'How do credits work?'],
+};
+
+function contextSuggestions(intent, hasResults) {
+  if (intent === 'FIND_SERVICE') {
+    return hasResults ? CONTEXT_SUGGESTIONS.FIND_SERVICE_results : CONTEXT_SUGGESTIONS.FIND_SERVICE_noresults;
   }
-
-  // Fallback — nothing in the matched category
-  const label = CATEGORY_LABELS[category] || category;
-  return {
-    response:
-      `😔 I couldn't find any ${label} services right now.\n\n` +
-      `💡 You can:\n• Browse all services to find something similar\n` +
-      `• Post a service request yourself\n• Try a different keyword`,
-    results: [],
-  };
+  return CONTEXT_SUGGESTIONS[intent] || CONTEXT_SUGGESTIONS.UNKNOWN;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DB helpers
+// KEYWORD → DB SEARCH TERM MAPPING
 // ─────────────────────────────────────────────────────────────────────────────
-async function dbQuery(terms, userId) {
-  if (!terms || terms.length === 0) return [];
 
+const KEYWORD_MAP = {
+  tutoring:     { kws: ['tutor','teach','study','math','maths','physics','chemistry','biology','exam','homework','revision','academic','essay','english','science'], terms: ['tutor','teaching','academic','study','homework'] },
+  music:        { kws: ['guitar','piano','violin','drums','singing','music','instrument','song','band'],                                                               terms: ['music','guitar','piano','violin','singing'] },
+  food:         { kws: ['food','hungry','cooking','cook','chef','meal','recipe','baking','eat'],                                                                        terms: ['cooking','food','baking','chef'] },
+  programming:  { kws: ['programming','coding','code','python','javascript','java','html','css','react','web','software','tech','computer','developer'],                terms: ['programming','coding','development','software','web'] },
+  design:       { kws: ['design','graphic','logo','photoshop','figma','illustration','art','artist','ui','ux'],                                                        terms: ['design','graphic','art','ui'] },
+  language:     { kws: ['language','spanish','french','arabic','german','chinese','japanese','translate','speak'],                                                      terms: ['language','spanish','french','arabic','translation'] },
+  fitness:      { kws: ['fitness','gym','workout','exercise','yoga','sport','running','training'],                                                                       terms: ['fitness','gym','yoga','exercise','training'] },
+  construction: { kws: ['construction','repair','fix','plumber','electrician','carpenter','handyman','builder'],                                                        terms: ['construction','repair','building','handyman'] },
+  writing:      { kws: ['writing','write','essay','grammar','proofread','cv','resume','blog','content'],                                                                terms: ['writing','essay','grammar','content'] },
+  business:     { kws: ['business','accounting','finance','marketing','economics','tax'],                                                                               terms: ['business','accounting','finance','marketing'] },
+  photography:  { kws: ['photo','photography','video','camera','filming'],                                                                                             terms: ['photography','video','photo'] },
+};
+
+const STOPWORDS = new Set(['i','a','an','the','is','are','want','need','can','you','for','me','help','with','to','and','or','my','some','any','do','have','get','find','please','someone','anyone']);
+
+function extractSearchTerms(message) {
+  const lower = message.toLowerCase();
+  for (const { kws, terms } of Object.values(KEYWORD_MAP)) {
+    if (kws.some(k => lower.includes(k))) return terms;
+  }
+  const words = lower.split(/\s+/).filter(w => w.length > 2 && !STOPWORDS.has(w));
+  return words.length > 0 ? words.slice(0, 4) : [message];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DB SEARCH
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function dbSearch(terms, userId) {
+  if (!terms?.length) return [];
   const conditions = terms
     .map(() => '(s.title LIKE ? OR s.description LIKE ? OR s.category LIKE ?)')
     .join(' OR ');
   const params = [];
   terms.forEach(t => params.push(`%${t}%`, `%${t}%`, `%${t}%`));
-
   const [rows] = await db.query(
-    `SELECT DISTINCT s.*, u.full_name AS provider_name, u.reputation_score
+    `SELECT DISTINCT s.id, s.title, s.description, s.category, s.credits_cost, s.duration_minutes,
+            u.full_name AS provider_name, u.reputation_score
      FROM services s
      JOIN users u ON s.user_id = u.id
      WHERE (${conditions})
        AND s.status = 'active'
        AND u.account_status = 'active'
        AND u.id != ?
-     GROUP BY s.id
      ORDER BY u.reputation_score DESC
-     LIMIT 10`,
+     LIMIT 8`,
     [...params, userId]
   );
   return rows;
 }
 
-function formatResults(services) {
-  let text = '';
-  services.forEach((s, i) => {
-    text += `${i + 1}. 📚 ${s.title}\n`;
-    text += `   👤 ${s.provider_name}\n`;
-    text += `   💰 ${s.credits_cost || 0} credits\n`;
-    text += `   ⭐ ${s.reputation_score ? Number(s.reputation_score).toFixed(1) : '5.0'}/5.0\n`;
-    if (s.description) {
-      text += `   📝 ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''}\n`;
-    }
-    text += '\n';
-  });
-  return text;
+function formatServicesForClaude(services) {
+  if (!services.length) return 'No services found for these search terms.';
+  return services.map((s, i) =>
+    `${i + 1}. "${s.title}" by ${s.provider_name} — ${s.credits_cost} credits` +
+    (s.duration_minutes ? ` (${s.duration_minutes} min)` : '') +
+    `\n   Rating: ${s.reputation_score ? Number(s.reputation_score).toFixed(1) : '5.0'}/5.0` +
+    (s.description ? `\n   ${s.description.substring(0, 120)}${s.description.length > 120 ? '...' : ''}` : '')
+  ).join('\n\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Conversation responses
+// SMART FALLBACK  (no API key — never hits a dead end)
 // ─────────────────────────────────────────────────────────────────────────────
-function getConversationResponse(intent, message) {
-  const lower = message.toLowerCase();
 
-  if (intent === 'greeting') {
-    return (
-      "Hi there! 👋 I'm your AI Service Finder.\n\n" +
-      "I can help you find services like:\n" +
-      "• 📚 Tutoring (Maths, Spanish, Programming...)\n" +
-      "• 🎵 Music lessons (Guitar, Piano, Singing...)\n" +
-      "• 🍳 Cooking / Food\n" +
-      "• 💻 Tech & Design\n" +
-      "• 🏗 Construction & Repairs\n" +
-      "• ...and much more!\n\n" +
-      "Just tell me what you need!"
-    );
+async function smartFallback(message, userId) {
+  const lower = message.toLowerCase().trim();
+
+  // Greeting
+  if (/^(hi|hey|hello|howdy|hiya|yo|sup|what's up|wassup)[\s!?.]*$/i.test(lower)) {
+    const r = SMART_RESPONSES.GREETING;
+    return { response: r.text, suggestions: r.suggestions, intent: 'GREETING', results: [] };
   }
 
-  if (intent === 'conversation') {
-    if (/how are you|how r u/.test(lower))
-      return "I'm doing great, thanks! 😊 What service can I help you find today?";
+  const { intent } = detectIntent(message);
 
-    if (/who are you|what are you|what can you do|tell me about/.test(lower))
-      return (
-        "I'm the AI Service Finder for SkillSwap! 🤖\n\n" +
-        "I understand natural language — try asking:\n" +
-        "• \"Is there any guitar teacher here?\"\n" +
-        "• \"I'm starving — any food service?\"\n" +
-        "• \"Anyone in construction?\"\n" +
-        "• \"I need help with my Maths exam\""
-      );
-
-    if (/thank|thanks|thx|cheers/.test(lower))
-      return "You're welcome! 😊 Let me know if you need anything else.";
-
-    if (/bye|goodbye|see you|cya|take care/.test(lower))
-      return "Goodbye! 👋 Come back anytime you need help finding services.";
-
-    // Vague emotional / state messages
-    if (/i am tired|i'm tired|i am bored|i'm bored/.test(lower))
-      return "Sorry to hear that! 😅 Maybe a skill exchange session can cheer you up?\n\nAre you looking for tutoring, music, fitness, or something else?";
-
-    return (
-      "I'm here to help! 😊\n\n" +
-      "Tell me what kind of service you need and I'll find it for you.\n\n" +
-      "Example: \"Is there a cooking class?\" or \"I need a programming tutor\""
-    );
+  // Service search: hit the DB
+  if (intent === 'FIND_SERVICE') {
+    const terms = extractSearchTerms(message);
+    const services = await dbSearch(terms, userId);
+    const r = SMART_RESPONSES.FIND_SERVICE;
+    return {
+      response:    services.length > 0 ? r.textFound(services.length) : r.textNotFound,
+      suggestions: services.length > 0 ? r.suggestionsFound : r.suggestionsNotFound,
+      intent,
+      results: services,
+    };
   }
 
-  if (intent === 'unknown') {
-    return (
-      "I'm not sure what you mean. 🤔\n\n" +
-      "Are you looking for one of these?\n" +
-      "• 📚 Tutoring / academic help\n" +
-      "• 🎵 Music lessons\n" +
-      "• 🍳 Cooking / food\n" +
-      "• 💻 Programming / design\n" +
-      "• 🏗 Construction / repairs\n\n" +
-      "Just describe what you need in plain words!"
-    );
+  // General browse: return a sample of services as a taster
+  if (intent === 'GENERAL_BROWSE') {
+    const services = await dbSearch(['tutor', 'coding', 'design', 'language'], userId);
+    const r = SMART_RESPONSES.GENERAL_BROWSE;
+    return { response: r.text, suggestions: r.suggestions, intent, results: services.slice(0, 5) };
   }
 
-  return null; // service_request → proceed to category search
+  // All other intents: pre-built contextual response — never blank
+  const r = SMART_RESPONSES[intent] || SMART_RESPONSES.UNKNOWN;
+  return { response: r.text, suggestions: r.suggestions, intent, results: [] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Route handlers
+// ROUTE: POST /api/ai/chat
 // ─────────────────────────────────────────────────────────────────────────────
 
-// @route POST /api/ai/search
-const aiSearch = async (req, res) => {
-  try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ message: 'Message is required' });
-
-    const category = mapToCategory(message);
-    if (!category) {
-      return res.json({
-        success: true,
-        response:
-          "I couldn't identify a service category from your message.\n\n" +
-          "Try: \"I need a music tutor\" or \"Is there a cooking class?\"",
-        results: [],
-      });
-    }
-    const result = await searchByCategory(category, req.user.id);
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error('AI Search error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// @route POST /api/ai/chat
 const aiChat = async (req, res) => {
   try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ message: 'Message is required' });
+    const { message, history = [] } = req.body;
+    if (!message?.trim()) return res.status(400).json({ message: 'Message is required' });
 
-    // AI responses live in frontend state only — never written to messages table.
+    const hasApiKey = process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your-anthropic-api-key-here';
+    const { intent } = detectIntent(message);
 
-    // Step 1 — classify
-    const intent = classifyIntent(message);
-
-    // Step 2 — handle non-search intents immediately
-    const canned = getConversationResponse(intent, message);
-    if (canned !== null) {
-      return res.json({ success: true, response: canned, results: [] });
+    // ── No API key: smart fallback (never a dead end) ─────────────────────────
+    if (!hasApiKey) {
+      const result = await smartFallback(message, req.user.id);
+      return res.json({ success: true, ...result });
     }
 
-    // Step 3 — map to category
-    const category = mapToCategory(message);
-    if (!category) {
+    // ── Claude API path ───────────────────────────────────────────────────────
+    const messages = [
+      ...history
+        .slice(-10)
+        .filter(m => m.sender_id !== 'welcome')
+        .map(m => ({ role: m.sender_id === 'ai' ? 'assistant' : 'user', content: m.message })),
+      { role: 'user', content: message },
+    ];
+
+    const firstResponse = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      tools,
+      messages,
+    });
+
+    // Tool use → search DB, second call
+    if (firstResponse.stop_reason === 'tool_use') {
+      const toolUse = firstResponse.content.find(c => c.type === 'tool_use');
+      const searchTerms = toolUse?.input?.terms || [message];
+      const services = await dbSearch(searchTerms, req.user.id);
+
+      const secondResponse = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        tools,
+        messages: [
+          ...messages,
+          { role: 'assistant', content: firstResponse.content },
+          {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: formatServicesForClaude(services) }],
+          },
+        ],
+      });
+
+      const aiText = secondResponse.content.find(c => c.type === 'text')?.text || 'Here are the results!';
       return res.json({
         success: true,
-        response:
-          "I'm not sure which type of service you need. 🤔\n\n" +
-          "Are you looking for:\n" +
-          "• Tutoring, Music, Cooking, Programming, Design,\n" +
-          "• Fitness, Languages, Construction, Writing...?\n\n" +
-          "Just say something like: \"I need a guitar teacher\" or \"Anyone for construction?\"",
-        results: [],
+        response: aiText,
+        suggestions: contextSuggestions('FIND_SERVICE', services.length > 0),
+        intent: 'FIND_SERVICE',
+        results: services,
       });
     }
 
-    // Step 4 — search by category
-    const result = await searchByCategory(category, req.user.id);
-    res.json({ success: true, ...result });
+    // Plain text response — wrap with intent-contextual suggestions
+    const aiText = firstResponse.content.find(c => c.type === 'text')?.text || "I'm here to help!";
+    return res.json({
+      success: true,
+      response: aiText,
+      suggestions: contextSuggestions(intent, false),
+      intent,
+      results: [],
+    });
 
   } catch (err) {
     console.error('AI Chat error:', err);
+    if (err.status === 401) {
+      return res.status(503).json({ message: 'Invalid API key. Please check ANTHROPIC_API_KEY in the backend .env file.' });
+    }
+    res.status(500).json({ message: 'AI service error. Please try again.' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE: POST /api/ai/search  (backwards compatibility)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const aiSearch = async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ message: 'Message is required' });
+  try {
+    const services = await dbSearch([message], req.user.id);
+    res.json({
+      success: true,
+      response: services.length > 0 ? `Found ${services.length} services.` : 'No services found.',
+      results: services,
+    });
+  } catch (err) {
+    console.error('AI Search error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

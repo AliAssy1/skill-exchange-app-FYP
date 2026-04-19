@@ -94,6 +94,26 @@ class UserService {
     }
   }
 
+  // Update current user's location
+  async updateLocation(latitude, longitude) {
+    try {
+      await api.put('/users/location', { latitude, longitude });
+      return { success: true };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // Get nearby users
+  async getNearbyUsers(latitude, longitude, radius = 10) {
+    try {
+      const response = await api.get(`/users/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`);
+      return { success: true, data: response.data.users };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
   // Error handler
   handleError(error) {
     const message = error.response?.data?.message || error.message || 'An error occurred';

@@ -12,9 +12,9 @@ class AIService {
   }
 
   // Chat with AI assistant
-  async chat(message) {
+  async chat(message, history = []) {
     try {
-      const response = await api.post('/ai/chat', { message });
+      const response = await api.post('/ai/chat', { message, history });
       return { success: true, data: response.data };
     } catch (error) {
       return this.handleError(error);

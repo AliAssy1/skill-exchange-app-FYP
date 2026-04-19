@@ -6,6 +6,8 @@ import {
   Text,
   TouchableOpacity,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import InputField from '../components/InputField';
@@ -143,7 +145,12 @@ export default function ProfileSetupScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={88}
+    >
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={styles.contentContainer}>
         <View style={styles.stepIndicator}>
           <Text style={styles.stepText}>Step {step} of 3</Text>
@@ -249,6 +256,7 @@ export default function ProfileSetupScreen({ navigation }) {
         </View>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

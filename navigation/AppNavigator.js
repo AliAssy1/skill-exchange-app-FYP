@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../constants/theme';
+import { UnreadProvider, useUnread } from '../contexts/UnreadContext';
 
 import LoginScreen from '../screens/LoginScreen';
 import RegistrationScreen from '../screens/RegistrationScreen';
@@ -27,7 +28,9 @@ import MyServicesScreen from '../screens/MyServicesScreen';
 import IncomingRequestsScreen from '../screens/IncomingRequestsScreen';
 import SentRequestsScreen from '../screens/SentRequestsScreen';
 import BuyCreditsScreen from '../screens/BuyCreditsScreen';
-import chatService from '../services/chatService';
+import NearbyUsersScreen from '../screens/NearbyUsersScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -80,17 +83,7 @@ function TabIcon({ name, focused, color }) {
 }
 
 function MainTabs() {
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    const poll = async () => {
-      const result = await chatService.getUnreadCount();
-      if (result.success) setUnreadCount(result.data?.unread_count || 0);
-    };
-    poll();
-    const interval = setInterval(poll, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  const { unreadCount } = useUnread();
 
   return (
     <Tab.Navigator
@@ -182,6 +175,7 @@ function MainTabs() {
 
 export default function AppNavigator() {
   return (
+    <UnreadProvider>
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName="Auth"
@@ -269,7 +263,7 @@ export default function AppNavigator() {
           />
           <Stack.Screen
             name="EditProfile"
-            component={ProfileSetupScreen}
+            component={EditProfileScreen}
             options={{ title: 'Edit Profile' }}
           />
           <Stack.Screen
@@ -287,8 +281,19 @@ export default function AppNavigator() {
             component={BuyCreditsScreen}
             options={{ title: 'Buy Credits' }}
           />
+          <Stack.Screen
+            name="NearbyUsers"
+            component={NearbyUsersScreen}
+            options={{ title: 'Nearby Students' }}
+          />
+          <Stack.Screen
+            name="ServiceHistory"
+            component={ServiceHistoryScreen}
+            options={{ title: 'Service History' }}
+          />
         </Stack.Group>
       </Stack.Navigator>
     </NavigationContainer>
+    </UnreadProvider>
   );
 }

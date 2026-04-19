@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   ScrollView,
@@ -6,6 +6,8 @@ import {
   Text,
   TouchableOpacity,
   StatusBar,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InputField from '../components/InputField';
@@ -21,6 +23,19 @@ export default function LoginScreen({ navigation }) {
   const [errors, setErrors]     = useState({});
   const [loading, setLoading]   = useState(false);
   const { login } = useAuth();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+      e => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const validateForm = () => {
     const newErrors = {};
@@ -54,7 +69,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingBottom: keyboardHeight }]}>
       <StatusBar barStyle="light-content" backgroundColor={AppColors.primary[800]} />
 
       {/* Header */}

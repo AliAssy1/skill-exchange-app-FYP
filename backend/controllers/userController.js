@@ -147,6 +147,54 @@ exports.getUserStats = async (req, res) => {
   }
 };
 
+// @desc    Update user location
+// @route   PUT /api/users/location
+// @access  Private
+exports.updateLocation = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ message: 'Invalid coordinates' });
+    }
+    await db.query('UPDATE users SET latitude = ?, longitude = ? WHERE id = ?', [lat, lng, req.user.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update location error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get nearby users
+// @route   GET /api/users/nearby?lat=&lng=&radius=
+// @access  Private
+exports.getNearbyUsers = async (req, res) => {
+  try {
+    const { lat, lng, radius = 10 } = req.query;
+    const latF = parseFloat(lat);
+    const lngF = parseFloat(lng);
+    const radiusF = Math.min(50, Math.max(1, parseFloat(radius) || 10));
+    if (!Number.isFinite(latF) || !Number.isFinite(lngF)) {
+      return res.status(400).json({ message: 'Invalid coordinates' });
+    }
+    const [users] = await db.query(
+      `SELECT id, full_name, major, year_of_study, bio, reputation_score, avatar_url,
+              ROUND(6371 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))), 2) AS distance_km
+       FROM users
+       WHERE account_status = 'active' AND id != ? AND latitude IS NOT NULL AND longitude IS NOT NULL
+       HAVING distance_km <= ?
+       ORDER BY distance_km ASC
+       LIMIT 30`,
+      [latF, lngF, latF, req.user.id, radiusF]
+    );
+    res.json({ success: true, users });
+  } catch (error) {
+    console.error('Get nearby users error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Search users
 // @route   GET /api/users/search?q=query
 // @access  Private
